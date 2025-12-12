@@ -1,0 +1,22 @@
+/target
+/Cargo.lock
+.env
+*.pdb
+*.exe
+.DS_Store
+
+CLAUDE.md
+.claude/
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
+
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
