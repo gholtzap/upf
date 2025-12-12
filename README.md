@@ -33,32 +33,62 @@
 - clap for command line arguments
 - anyhow for error handling
 
+## 11. PFCP Protocol Infrastructure
+- PFCP message header parsing and encoding (version, message type, length, SEID)
+- Sequence number management for requests/responses
+- UDP socket on N4 interface (port 8805)
+- Basic message framing and validation
+- Information Element (IE) encoding/decoding framework
+- Message type enumeration (Heartbeat, Association Setup, Session Management)
+- Cause value enumeration for response messages
+- Node ID types (IPv4, IPv6, FQDN)
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
 ### 1.1 PFCP (N4 Interface - UPF to SMF)
 **Purpose:** Control plane communication with SMF
 
-- **Association Setup**
-  - Heartbeat Request/Response (keep connection alive)
-  - Association Setup Request/Response (establish connection to SMF)
+#### 1.1.2 PFCP Association Setup
+- Association Setup Request/Response parsing
+- Node ID Information Element
+- Recovery Time Stamp Information Element
+- Association state management
 
-- **Session Management Messages**
-  - Session Establishment Request/Response
-  - Session Modification Request/Response
-  - Session Deletion Request/Response
+#### 1.1.3 PFCP Heartbeat
+- Heartbeat Request/Response parsing
+- Recovery Time Stamp handling
+- Periodic heartbeat transmission
+- Connection health monitoring
 
-- **Essential Information Elements**
-  - PDR (Packet Detection Rule) - tells UPF which packets to match
-  - FAR (Forwarding Action Rule) - tells UPF what to do with matched packets
-  - F-SEID (Session Endpoint Identifier) - identifies the session
-  - UE IP Address - the IP assigned to the user's device
-  - Network Instance - which network/DNN the session belongs to
+#### 1.1.4 PFCP Session Establishment
+- Session Establishment Request/Response parsing
+- F-SEID (Session Endpoint Identifier) IE
+- Create PDR (Packet Detection Rule) IE
+- Create FAR (Forwarding Action Rule) IE
+- UE IP Address allocation IE
+- Network Instance IE
+- Session creation in session store
 
-- **Basic Actions**
-  - Forward packets
-  - Drop packets
-  - Buffer packets (for handover)
+#### 1.1.5 PFCP Session Modification
+- Session Modification Request/Response parsing
+- Update PDR IE
+- Update FAR IE
+- Session state updates
+
+#### 1.1.6 PFCP Session Deletion
+- Session Deletion Request/Response parsing
+- Session cleanup and resource release
+- Usage reporting IEs
+
+#### 1.1.7 Essential Information Elements
+- PDR (Packet Detection Rule) encoding/decoding
+- FAR (Forwarding Action Rule) encoding/decoding
+- F-SEID (Session Endpoint Identifier)
+- UE IP Address
+- Network Instance
+- QFI (QoS Flow Identifier)
+- Apply Action (Forward/Drop/Buffer)
 
 ### 1.2 GTP-U (User Plane Tunneling)
 
