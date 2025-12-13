@@ -62,6 +62,13 @@
 - Support for dual-stack (IPv4 + IPv6)
 - Full test coverage
 
+## 15. UE IP Address Information Element
+- IE type and structure definition
+- IPv4 and IPv6 address allocation
+- Parse and encode functions
+- Support for dual-stack (IPv4 + IPv6)
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -70,17 +77,12 @@
 
 #### 1.1.4 PFCP Session Establishment
 
-##### 1.1.4.1 UE IP Address IE
-- IE type and structure definition
-- IPv4 and IPv6 address allocation
-- Parse and encode functions
-
-##### 1.1.4.2 Network Instance IE
+##### 1.1.4.1 Network Instance IE
 - IE type and structure definition
 - APN/DNN string encoding
 - Parse and encode functions
 
-##### 1.1.4.3 Create PDR (Packet Detection Rule) IE
+##### 1.1.4.2 Create PDR (Packet Detection Rule) IE
 - PDR ID
 - Precedence
 - PDI (Packet Detection Information)
@@ -88,20 +90,20 @@
 - UE IP Address matching
 - Parse and encode functions
 
-##### 1.1.4.4 Create FAR (Forwarding Action Rule) IE
+##### 1.1.4.3 Create FAR (Forwarding Action Rule) IE
 - FAR ID
 - Apply Action (Forward/Drop/Buffer)
 - Forwarding Parameters
 - Destination Interface
 - Parse and encode functions
 
-##### 1.1.4.5 Session Establishment Request/Response parsing
+##### 1.1.4.4 Session Establishment Request/Response parsing
 - Message structure for Session Establishment Request
 - Message structure for Session Establishment Response
 - Integration with existing message parsing framework
 - Cause value handling
 
-##### 1.1.4.6 Session store integration
+##### 1.1.4.5 Session store integration
 - Session creation in HashMap
 - SEID to Session mapping
 - PDR and FAR association with sessions
@@ -267,7 +269,7 @@
 - Session not found: Send PFCP error response
 - Interface down: Log error, drop packets
 
-## 15. Critical 3GPP Specs to Read
+## 16. Critical 3GPP Specs to Read
 
 **Must read:**
 - TS 29.244 - PFCP protocol (focus on sections 7.4-7.5 for messages)
