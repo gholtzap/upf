@@ -49,17 +49,16 @@
 - Recovery Time Stamp Information Element
 - Association state management
 
+## 13. PFCP Heartbeat
+- Heartbeat Request/Response parsing
+- Recovery Time Stamp handling
+- Connection health monitoring
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
 ### 1.1 PFCP (N4 Interface - UPF to SMF)
 **Purpose:** Control plane communication with SMF
-
-#### 1.1.3 PFCP Heartbeat
-- Heartbeat Request/Response parsing
-- Recovery Time Stamp handling
-- Periodic heartbeat transmission
-- Connection health monitoring
 
 #### 1.1.4 PFCP Session Establishment
 - Session Establishment Request/Response parsing

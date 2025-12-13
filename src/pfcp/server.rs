@@ -1,6 +1,6 @@
 use super::header::{PfcpMessage, Result};
 use super::types::{MessageType, PFCP_PORT, CauseValue};
-use super::messages::{AssociationSetupRequest, AssociationSetupResponse};
+use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse};
 use super::association::{Association, AssociationManager};
 use super::ie::{NodeId, RecoveryTimeStamp};
 use bytes::Bytes;
@@ -102,11 +102,26 @@ impl PfcpServer {
     async fn handle_heartbeat_request(&self, request: &PfcpMessage, peer_addr: SocketAddr) -> Result<()> {
         debug!("Handling heartbeat request from {}", peer_addr);
 
+        let req = match HeartbeatRequest::parse(request.payload.clone()) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Failed to parse heartbeat request: {}", e);
+                return Ok(());
+            }
+        };
+
+        debug!(
+            "Heartbeat request from {} (recovery: {})",
+            peer_addr, req.recovery_time_stamp.0
+        );
+
+        let resp = HeartbeatResponse::new(self.recovery_time_stamp);
+
         let response = PfcpMessage::new(
             MessageType::HeartbeatResponse,
             None,
             request.header.sequence_number,
-            Bytes::new(),
+            resp.encode().freeze(),
         );
 
         self.send_message(&response, peer_addr).await?;

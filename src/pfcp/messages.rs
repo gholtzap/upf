@@ -3,6 +3,86 @@ use super::ie::{InformationElement, NodeId, RecoveryTimeStamp, parse_ies, encode
 use super::types::CauseValue;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct HeartbeatRequest {
+    pub recovery_time_stamp: RecoveryTimeStamp,
+}
+
+impl HeartbeatRequest {
+    pub fn parse(mut buf: Bytes) -> IeResult<Self> {
+        let ies = parse_ies(&mut buf)?;
+
+        let mut recovery_time_stamp = None;
+
+        for ie in ies {
+            match ie {
+                InformationElement::RecoveryTimeStamp(t) => recovery_time_stamp = Some(t),
+                _ => {}
+            }
+        }
+
+        let recovery_time_stamp = recovery_time_stamp.ok_or_else(|| {
+            super::ie::IeError::InvalidLength(0)
+        })?;
+
+        Ok(HeartbeatRequest {
+            recovery_time_stamp,
+        })
+    }
+
+    pub fn encode(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+        let ies = vec![
+            InformationElement::RecoveryTimeStamp(self.recovery_time_stamp),
+        ];
+        encode_ies(&ies, &mut buf);
+        buf
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeartbeatResponse {
+    pub recovery_time_stamp: RecoveryTimeStamp,
+}
+
+impl HeartbeatResponse {
+    pub fn new(recovery_time_stamp: RecoveryTimeStamp) -> Self {
+        HeartbeatResponse {
+            recovery_time_stamp,
+        }
+    }
+
+    pub fn parse(mut buf: Bytes) -> IeResult<Self> {
+        let ies = parse_ies(&mut buf)?;
+
+        let mut recovery_time_stamp = None;
+
+        for ie in ies {
+            match ie {
+                InformationElement::RecoveryTimeStamp(t) => recovery_time_stamp = Some(t),
+                _ => {}
+            }
+        }
+
+        let recovery_time_stamp = recovery_time_stamp.ok_or_else(|| {
+            super::ie::IeError::InvalidLength(0)
+        })?;
+
+        Ok(HeartbeatResponse {
+            recovery_time_stamp,
+        })
+    }
+
+    pub fn encode(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+        let ies = vec![
+            InformationElement::RecoveryTimeStamp(self.recovery_time_stamp),
+        ];
+        encode_ies(&ies, &mut buf);
+        buf
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct AssociationSetupRequest {
     pub node_id: NodeId,
     pub recovery_time_stamp: RecoveryTimeStamp,
