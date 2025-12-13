@@ -28,6 +28,7 @@ pub enum IeType {
     UeIpAddress = 93,
     NodeId = 60,
     FSeid = 57,
+    NetworkInstance = 22,
 }
 
 impl IeType {
@@ -37,6 +38,7 @@ impl IeType {
             93 => Ok(IeType::UeIpAddress),
             60 => Ok(IeType::NodeId),
             57 => Ok(IeType::FSeid),
+            22 => Ok(IeType::NetworkInstance),
             _ => Err(IeError::InvalidType(value)),
         }
     }
@@ -328,12 +330,37 @@ impl FSeid {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkInstance(pub String);
+
+impl NetworkInstance {
+    pub fn new(name: String) -> Self {
+        NetworkInstance(name)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let name_bytes = buf.chunk().to_vec();
+        buf.advance(name_bytes.len());
+        let name = String::from_utf8(name_bytes)?;
+        Ok(NetworkInstance(name))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_slice(self.0.as_bytes());
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
     RecoveryTimeStamp(RecoveryTimeStamp),
     UeIpAddress(UeIpAddress),
     FSeid(FSeid),
+    NetworkInstance(NetworkInstance),
 }
 
 impl InformationElement {
@@ -366,6 +393,9 @@ impl InformationElement {
                 UeIpAddress::parse(&mut value_buf)?,
             )),
             IeType::FSeid => Ok(InformationElement::FSeid(FSeid::parse(&mut value_buf)?)),
+            IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
+                NetworkInstance::parse(&mut value_buf)?,
+            )),
         }
     }
 
@@ -390,6 +420,11 @@ impl InformationElement {
                 buf.put_u16(IeType::FSeid as u16);
                 buf.put_u16(fseid.len() as u16);
                 fseid.encode(buf);
+            }
+            InformationElement::NetworkInstance(network_instance) => {
+                buf.put_u16(IeType::NetworkInstance as u16);
+                buf.put_u16(network_instance.len() as u16);
+                network_instance.encode(buf);
             }
         }
     }
@@ -607,5 +642,45 @@ mod tests {
         let parsed = InformationElement::parse(&mut bytes).unwrap();
 
         assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_network_instance() {
+        let network_instance = NetworkInstance::new("internet.apn".to_string());
+
+        let mut buf = BytesMut::new();
+        network_instance.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = NetworkInstance::parse(&mut bytes).unwrap();
+
+        assert_eq!(network_instance, parsed);
+    }
+
+    #[test]
+    fn test_network_instance_ie_encoding() {
+        let network_instance = NetworkInstance::new("ims.apn".to_string());
+        let ie = InformationElement::NetworkInstance(network_instance);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_network_instance_empty() {
+        let network_instance = NetworkInstance::new("".to_string());
+
+        let mut buf = BytesMut::new();
+        network_instance.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = NetworkInstance::parse(&mut bytes).unwrap();
+
+        assert_eq!(network_instance, parsed);
     }
 }
