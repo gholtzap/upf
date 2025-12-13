@@ -1,6 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
+use crate::types::identifiers::SEID;
 
 #[derive(Debug, Error)]
 pub enum IeError {
@@ -25,6 +26,7 @@ pub type IeResult<T> = Result<T, IeError>;
 pub enum IeType {
     RecoveryTimeStamp = 96,
     NodeId = 60,
+    FSeid = 57,
 }
 
 impl IeType {
@@ -32,6 +34,7 @@ impl IeType {
         match value {
             96 => Ok(IeType::RecoveryTimeStamp),
             60 => Ok(IeType::NodeId),
+            57 => Ok(IeType::FSeid),
             _ => Err(IeError::InvalidType(value)),
         }
     }
@@ -147,10 +150,101 @@ impl RecoveryTimeStamp {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FSeid {
+    pub seid: SEID,
+    pub ipv4: Option<Ipv4Addr>,
+    pub ipv6: Option<Ipv6Addr>,
+}
+
+impl FSeid {
+    pub fn new(seid: SEID, ipv4: Option<Ipv4Addr>, ipv6: Option<Ipv6Addr>) -> Self {
+        FSeid { seid, ipv4, ipv6 }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 9 {
+            return Err(IeError::BufferTooShort {
+                needed: 9,
+                available: buf.remaining(),
+            });
+        }
+
+        let flags = buf.get_u8();
+        let v4 = (flags & 0x02) != 0;
+        let v6 = (flags & 0x01) != 0;
+
+        let seid = SEID(buf.get_u64());
+
+        let ipv4 = if v4 {
+            if buf.remaining() < 4 {
+                return Err(IeError::BufferTooShort {
+                    needed: 4,
+                    available: buf.remaining(),
+                });
+            }
+            let mut octets = [0u8; 4];
+            buf.copy_to_slice(&mut octets);
+            Some(Ipv4Addr::from(octets))
+        } else {
+            None
+        };
+
+        let ipv6 = if v6 {
+            if buf.remaining() < 16 {
+                return Err(IeError::BufferTooShort {
+                    needed: 16,
+                    available: buf.remaining(),
+                });
+            }
+            let mut octets = [0u8; 16];
+            buf.copy_to_slice(&mut octets);
+            Some(Ipv6Addr::from(octets))
+        } else {
+            None
+        };
+
+        Ok(FSeid { seid, ipv4, ipv6 })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        let mut flags = 0u8;
+        if self.ipv4.is_some() {
+            flags |= 0x02;
+        }
+        if self.ipv6.is_some() {
+            flags |= 0x01;
+        }
+
+        buf.put_u8(flags);
+        buf.put_u64(self.seid.0);
+
+        if let Some(ipv4) = self.ipv4 {
+            buf.put_slice(&ipv4.octets());
+        }
+
+        if let Some(ipv6) = self.ipv6 {
+            buf.put_slice(&ipv6.octets());
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 9;
+        if self.ipv4.is_some() {
+            len += 4;
+        }
+        if self.ipv6.is_some() {
+            len += 16;
+        }
+        len
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
     RecoveryTimeStamp(RecoveryTimeStamp),
+    FSeid(FSeid),
 }
 
 impl InformationElement {
@@ -179,6 +273,7 @@ impl InformationElement {
             IeType::RecoveryTimeStamp => Ok(InformationElement::RecoveryTimeStamp(
                 RecoveryTimeStamp::parse(&mut value_buf)?,
             )),
+            IeType::FSeid => Ok(InformationElement::FSeid(FSeid::parse(&mut value_buf)?)),
         }
     }
 
@@ -193,6 +288,11 @@ impl InformationElement {
                 buf.put_u16(IeType::RecoveryTimeStamp as u16);
                 buf.put_u16(ts.len() as u16);
                 ts.encode(buf);
+            }
+            InformationElement::FSeid(fseid) => {
+                buf.put_u16(IeType::FSeid as u16);
+                buf.put_u16(fseid.len() as u16);
+                fseid.encode(buf);
             }
         }
     }
@@ -274,6 +374,75 @@ mod tests {
     fn test_ie_encoding() {
         let node_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
         let ie = InformationElement::NodeId(node_id);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_fseid_ipv4_only() {
+        let fseid = FSeid::new(
+            SEID(0x1234567890ABCDEF),
+            Some(Ipv4Addr::new(10, 0, 0, 1)),
+            None,
+        );
+
+        let mut buf = BytesMut::new();
+        fseid.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = FSeid::parse(&mut bytes).unwrap();
+
+        assert_eq!(fseid, parsed);
+    }
+
+    #[test]
+    fn test_fseid_ipv6_only() {
+        let fseid = FSeid::new(
+            SEID(0x1234567890ABCDEF),
+            None,
+            Some(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)),
+        );
+
+        let mut buf = BytesMut::new();
+        fseid.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = FSeid::parse(&mut bytes).unwrap();
+
+        assert_eq!(fseid, parsed);
+    }
+
+    #[test]
+    fn test_fseid_dual_stack() {
+        let fseid = FSeid::new(
+            SEID(0xFEDCBA0987654321),
+            Some(Ipv4Addr::new(192, 168, 1, 100)),
+            Some(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)),
+        );
+
+        let mut buf = BytesMut::new();
+        fseid.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = FSeid::parse(&mut bytes).unwrap();
+
+        assert_eq!(fseid, parsed);
+    }
+
+    #[test]
+    fn test_fseid_ie_encoding() {
+        let fseid = FSeid::new(
+            SEID(0x1111222233334444),
+            Some(Ipv4Addr::new(172, 16, 0, 1)),
+            None,
+        );
+        let ie = InformationElement::FSeid(fseid);
 
         let mut buf = BytesMut::new();
         ie.encode(&mut buf);

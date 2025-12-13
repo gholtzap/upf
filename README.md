@@ -54,6 +54,14 @@
 - Recovery Time Stamp handling
 - Connection health monitoring
 
+## 14. F-SEID Information Element
+- IE type and structure definition
+- IPv4 and IPv6 support
+- SEID encoding/decoding
+- Parse and encode functions
+- Support for dual-stack (IPv4 + IPv6)
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -61,13 +69,43 @@
 **Purpose:** Control plane communication with SMF
 
 #### 1.1.4 PFCP Session Establishment
-- Session Establishment Request/Response parsing
-- F-SEID (Session Endpoint Identifier) IE
-- Create PDR (Packet Detection Rule) IE
-- Create FAR (Forwarding Action Rule) IE
-- UE IP Address allocation IE
-- Network Instance IE
-- Session creation in session store
+
+##### 1.1.4.1 UE IP Address IE
+- IE type and structure definition
+- IPv4 and IPv6 address allocation
+- Parse and encode functions
+
+##### 1.1.4.2 Network Instance IE
+- IE type and structure definition
+- APN/DNN string encoding
+- Parse and encode functions
+
+##### 1.1.4.3 Create PDR (Packet Detection Rule) IE
+- PDR ID
+- Precedence
+- PDI (Packet Detection Information)
+- Source Interface (N3/N6)
+- UE IP Address matching
+- Parse and encode functions
+
+##### 1.1.4.4 Create FAR (Forwarding Action Rule) IE
+- FAR ID
+- Apply Action (Forward/Drop/Buffer)
+- Forwarding Parameters
+- Destination Interface
+- Parse and encode functions
+
+##### 1.1.4.5 Session Establishment Request/Response parsing
+- Message structure for Session Establishment Request
+- Message structure for Session Establishment Response
+- Integration with existing message parsing framework
+- Cause value handling
+
+##### 1.1.4.6 Session store integration
+- Session creation in HashMap
+- SEID to Session mapping
+- PDR and FAR association with sessions
+- Thread-safe session management
 
 #### 1.1.5 PFCP Session Modification
 - Session Modification Request/Response parsing
@@ -229,7 +267,7 @@
 - Session not found: Send PFCP error response
 - Interface down: Log error, drop packets
 
-## 14. Critical 3GPP Specs to Read
+## 15. Critical 3GPP Specs to Read
 
 **Must read:**
 - TS 29.244 - PFCP protocol (focus on sections 7.4-7.5 for messages)

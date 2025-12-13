@@ -99,6 +99,7 @@ impl AssociationSetupRequest {
             match ie {
                 InformationElement::NodeId(n) => node_id = Some(n),
                 InformationElement::RecoveryTimeStamp(t) => recovery_time_stamp = Some(t),
+                _ => {}
             }
         }
 
@@ -152,6 +153,7 @@ impl AssociationSetupResponse {
             match ie {
                 InformationElement::NodeId(n) => node_id = Some(n),
                 InformationElement::RecoveryTimeStamp(t) => recovery_time_stamp = Some(t),
+                _ => {}
             }
         }
 
