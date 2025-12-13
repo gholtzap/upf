@@ -1,8 +1,11 @@
-use super::header::{PfcpError, PfcpMessage, Result};
-use super::types::{MessageType, PFCP_PORT};
+use super::header::{PfcpMessage, Result};
+use super::types::{MessageType, PFCP_PORT, CauseValue};
+use super::messages::{AssociationSetupRequest, AssociationSetupResponse};
+use super::association::{Association, AssociationManager};
+use super::ie::{NodeId, RecoveryTimeStamp};
 use bytes::Bytes;
 use log::{debug, error, info, warn};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, IpAddr};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
@@ -12,10 +15,13 @@ const MAX_PACKET_SIZE: usize = 65535;
 pub struct PfcpServer {
     socket: Arc<UdpSocket>,
     sequence_number: Arc<Mutex<u32>>,
+    association_manager: AssociationManager,
+    upf_node_id: NodeId,
+    recovery_time_stamp: RecoveryTimeStamp,
 }
 
 impl PfcpServer {
-    pub async fn new(bind_addr: String) -> Result<Self> {
+    pub async fn new(bind_addr: String, upf_node_id: String) -> Result<Self> {
         let full_addr = if bind_addr.contains(':') {
             bind_addr
         } else {
@@ -26,9 +32,18 @@ impl PfcpServer {
         let socket = UdpSocket::bind(&full_addr).await?;
         info!("PFCP server listening on {}", socket.local_addr()?);
 
+        let local_addr = socket.local_addr()?;
+        let node_id = match local_addr.ip() {
+            IpAddr::V4(addr) => NodeId::Ipv4(addr),
+            IpAddr::V6(addr) => NodeId::Ipv6(addr),
+        };
+
         Ok(Self {
             socket: Arc::new(socket),
             sequence_number: Arc::new(Mutex::new(1)),
+            association_manager: AssociationManager::new(),
+            upf_node_id: node_id,
+            recovery_time_stamp: RecoveryTimeStamp::now(),
         })
     }
 
@@ -103,15 +118,53 @@ impl PfcpServer {
     async fn handle_association_setup_request(&self, request: &PfcpMessage, peer_addr: SocketAddr) -> Result<()> {
         debug!("Handling association setup request from {}", peer_addr);
 
+        let req = match AssociationSetupRequest::parse(request.payload.clone()) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Failed to parse association setup request: {}", e);
+                let resp = AssociationSetupResponse::new(
+                    self.upf_node_id.clone(),
+                    self.recovery_time_stamp,
+                    CauseValue::MandatoryIeMissing,
+                );
+                let response = PfcpMessage::new(
+                    MessageType::AssociationSetupResponse,
+                    None,
+                    request.header.sequence_number,
+                    resp.encode().freeze(),
+                );
+                self.send_message(&response, peer_addr).await?;
+                return Ok(());
+            }
+        };
+
+        info!(
+            "Association setup request from {:?} (recovery: {})",
+            req.node_id, req.recovery_time_stamp.0
+        );
+
+        let association = Association::new(
+            req.node_id.clone(),
+            peer_addr,
+            req.recovery_time_stamp,
+        );
+        self.association_manager.add_association(association);
+
+        let resp = AssociationSetupResponse::new(
+            self.upf_node_id.clone(),
+            self.recovery_time_stamp,
+            CauseValue::RequestAccepted,
+        );
+
         let response = PfcpMessage::new(
             MessageType::AssociationSetupResponse,
             None,
             request.header.sequence_number,
-            Bytes::new(),
+            resp.encode().freeze(),
         );
 
         self.send_message(&response, peer_addr).await?;
-        debug!("Sent association setup response to {}", peer_addr);
+        info!("Association established with {}", peer_addr);
 
         Ok(())
     }

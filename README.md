@@ -43,17 +43,17 @@
 - Cause value enumeration for response messages
 - Node ID types (IPv4, IPv6, FQDN)
 
+## 12. PFCP Association Setup
+- Association Setup Request/Response parsing
+- Node ID Information Element
+- Recovery Time Stamp Information Element
+- Association state management
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
 ### 1.1 PFCP (N4 Interface - UPF to SMF)
 **Purpose:** Control plane communication with SMF
-
-#### 1.1.2 PFCP Association Setup
-- Association Setup Request/Response parsing
-- Node ID Information Element
-- Recovery Time Stamp Information Element
-- Association state management
 
 #### 1.1.3 PFCP Heartbeat
 - Heartbeat Request/Response parsing

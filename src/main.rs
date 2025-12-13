@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     info!("N6 interface: {}", config.n6_interface);
     info!("UPF Node ID: {}", config.upf_node_id);
 
-    let pfcp_server = PfcpServer::new(config.n4_address.to_string()).await?;
+    let pfcp_server = PfcpServer::new(config.n4_address.to_string(), config.upf_node_id.clone()).await?;
     info!("UPF initialized successfully");
 
     pfcp_server.run().await?;
