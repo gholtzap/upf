@@ -75,6 +75,12 @@
 - Parse and encode functions
 - Full test coverage
 
+## 17. PDR ID Information Element
+- IE type and structure definition
+- PDR ID encoding/decoding (u16)
+- Parse and encode functions
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -270,7 +276,7 @@
 - Session not found: Send PFCP error response
 - Interface down: Log error, drop packets
 
-## 17. Critical 3GPP Specs to Read
+## 18. Critical 3GPP Specs to Read
 
 **Must read:**
 - TS 29.244 - PFCP protocol (focus on sections 7.4-7.5 for messages)

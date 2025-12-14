@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
-use crate::types::identifiers::SEID;
+use crate::types::identifiers::{SEID, PDRID};
 
 #[derive(Debug, Error)]
 pub enum IeError {
@@ -28,6 +28,7 @@ pub enum IeType {
     UeIpAddress = 93,
     NodeId = 60,
     FSeid = 57,
+    PdrId = 56,
     NetworkInstance = 22,
 }
 
@@ -38,6 +39,7 @@ impl IeType {
             93 => Ok(IeType::UeIpAddress),
             60 => Ok(IeType::NodeId),
             57 => Ok(IeType::FSeid),
+            56 => Ok(IeType::PdrId),
             22 => Ok(IeType::NetworkInstance),
             _ => Err(IeError::InvalidType(value)),
         }
@@ -354,12 +356,40 @@ impl NetworkInstance {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PdrId(pub PDRID);
+
+impl PdrId {
+    pub fn new(id: PDRID) -> Self {
+        PdrId(id)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 2 {
+            return Err(IeError::BufferTooShort {
+                needed: 2,
+                available: buf.remaining(),
+            });
+        }
+        Ok(PdrId(PDRID(buf.get_u16())))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(self.0.0);
+    }
+
+    pub fn len(&self) -> usize {
+        2
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
     RecoveryTimeStamp(RecoveryTimeStamp),
     UeIpAddress(UeIpAddress),
     FSeid(FSeid),
+    PdrId(PdrId),
     NetworkInstance(NetworkInstance),
 }
 
@@ -393,6 +423,7 @@ impl InformationElement {
                 UeIpAddress::parse(&mut value_buf)?,
             )),
             IeType::FSeid => Ok(InformationElement::FSeid(FSeid::parse(&mut value_buf)?)),
+            IeType::PdrId => Ok(InformationElement::PdrId(PdrId::parse(&mut value_buf)?)),
             IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
                 NetworkInstance::parse(&mut value_buf)?,
             )),
@@ -420,6 +451,11 @@ impl InformationElement {
                 buf.put_u16(IeType::FSeid as u16);
                 buf.put_u16(fseid.len() as u16);
                 fseid.encode(buf);
+            }
+            InformationElement::PdrId(pdr_id) => {
+                buf.put_u16(IeType::PdrId as u16);
+                buf.put_u16(pdr_id.len() as u16);
+                pdr_id.encode(buf);
             }
             InformationElement::NetworkInstance(network_instance) => {
                 buf.put_u16(IeType::NetworkInstance as u16);
@@ -682,5 +718,45 @@ mod tests {
         let parsed = NetworkInstance::parse(&mut bytes).unwrap();
 
         assert_eq!(network_instance, parsed);
+    }
+
+    #[test]
+    fn test_pdr_id() {
+        let pdr_id = PdrId::new(PDRID(42));
+
+        let mut buf = BytesMut::new();
+        pdr_id.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PdrId::parse(&mut bytes).unwrap();
+
+        assert_eq!(pdr_id, parsed);
+    }
+
+    #[test]
+    fn test_pdr_id_ie_encoding() {
+        let pdr_id = PdrId::new(PDRID(1234));
+        let ie = InformationElement::PdrId(pdr_id);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_pdr_id_max_value() {
+        let pdr_id = PdrId::new(PDRID(65535));
+
+        let mut buf = BytesMut::new();
+        pdr_id.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PdrId::parse(&mut bytes).unwrap();
+
+        assert_eq!(pdr_id, parsed);
     }
 }
