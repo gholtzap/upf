@@ -111,6 +111,18 @@
 - Parse and encode functions
 - Full test coverage
 
+## 23. PDI (Packet Detection Information) Information Element
+- IE type and structure definition
+- Grouped IE containing Source Interface, Network Instance, UE IP Address
+- Parse and encode functions
+- Full test coverage
+
+## 24. Create PDR Information Element
+- IE type and structure definition
+- Grouped IE containing PDR ID, Precedence, PDI, and FAR ID
+- Parse and encode functions
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -119,28 +131,20 @@
 
 #### 1.1.4 PFCP Session Establishment
 
-##### 1.1.4.1 Create PDR (Packet Detection Rule) IE
-- PDR ID
-- Precedence
-- PDI (Packet Detection Information)
-- Source Interface (N3/N6)
-- UE IP Address matching
-- Parse and encode functions
-
-##### 1.1.4.2 Create FAR (Forwarding Action Rule) IE
+##### 1.1.4.1 Create FAR (Forwarding Action Rule) IE
 - FAR ID
 - Apply Action (Forward/Drop/Buffer)
 - Forwarding Parameters
 - Destination Interface
 - Parse and encode functions
 
-##### 1.1.4.3 Session Establishment Request/Response parsing
+##### 1.1.4.2 Session Establishment Request/Response parsing
 - Message structure for Session Establishment Request
 - Message structure for Session Establishment Response
 - Integration with existing message parsing framework
 - Cause value handling
 
-##### 1.1.4.4 Session store integration
+##### 1.1.4.3 Session store integration
 - Session creation in HashMap
 - SEID to Session mapping
 - PDR and FAR association with sessions

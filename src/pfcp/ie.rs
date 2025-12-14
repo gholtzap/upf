@@ -28,33 +28,37 @@ pub type IeResult<T> = Result<T, IeError>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 pub enum IeType {
-    RecoveryTimeStamp = 96,
-    UeIpAddress = 93,
-    FarId = 108,
-    NodeId = 60,
-    FSeid = 57,
-    PdrId = 56,
-    ApplyAction = 44,
-    DestinationInterface = 42,
-    Precedence = 29,
-    NetworkInstance = 22,
+    CreatePdr = 1,
+    Pdi = 2,
     SourceInterface = 20,
+    NetworkInstance = 22,
+    Precedence = 29,
+    DestinationInterface = 42,
+    ApplyAction = 44,
+    PdrId = 56,
+    FSeid = 57,
+    NodeId = 60,
+    UeIpAddress = 93,
+    RecoveryTimeStamp = 96,
+    FarId = 108,
 }
 
 impl IeType {
     pub fn from_u16(value: u16) -> IeResult<Self> {
         match value {
-            96 => Ok(IeType::RecoveryTimeStamp),
-            93 => Ok(IeType::UeIpAddress),
-            108 => Ok(IeType::FarId),
-            60 => Ok(IeType::NodeId),
-            57 => Ok(IeType::FSeid),
-            56 => Ok(IeType::PdrId),
-            44 => Ok(IeType::ApplyAction),
-            42 => Ok(IeType::DestinationInterface),
-            29 => Ok(IeType::Precedence),
-            22 => Ok(IeType::NetworkInstance),
+            1 => Ok(IeType::CreatePdr),
+            2 => Ok(IeType::Pdi),
             20 => Ok(IeType::SourceInterface),
+            22 => Ok(IeType::NetworkInstance),
+            29 => Ok(IeType::Precedence),
+            42 => Ok(IeType::DestinationInterface),
+            44 => Ok(IeType::ApplyAction),
+            56 => Ok(IeType::PdrId),
+            57 => Ok(IeType::FSeid),
+            60 => Ok(IeType::NodeId),
+            93 => Ok(IeType::UeIpAddress),
+            96 => Ok(IeType::RecoveryTimeStamp),
+            108 => Ok(IeType::FarId),
             _ => Err(IeError::InvalidType(value)),
         }
     }
@@ -594,6 +598,203 @@ impl ApplyAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Pdi {
+    pub source_interface: SourceInterface,
+    pub network_instance: Option<NetworkInstance>,
+    pub ue_ip_address: Option<UeIpAddress>,
+}
+
+impl Pdi {
+    pub fn new(source_interface: SourceInterface) -> Self {
+        Pdi {
+            source_interface,
+            network_instance: None,
+            ue_ip_address: None,
+        }
+    }
+
+    pub fn with_network_instance(mut self, network_instance: NetworkInstance) -> Self {
+        self.network_instance = Some(network_instance);
+        self
+    }
+
+    pub fn with_ue_ip_address(mut self, ue_ip_address: UeIpAddress) -> Self {
+        self.ue_ip_address = Some(ue_ip_address);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut source_interface = None;
+        let mut network_instance = None;
+        let mut ue_ip_address = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::SourceInterface => {
+                    source_interface = Some(SourceInterface::parse(&mut value_buf)?);
+                }
+                IeType::NetworkInstance => {
+                    network_instance = Some(NetworkInstance::parse(&mut value_buf)?);
+                }
+                IeType::UeIpAddress => {
+                    ue_ip_address = Some(UeIpAddress::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        let source_interface = source_interface.ok_or(IeError::InvalidLength(0))?;
+
+        Ok(Pdi {
+            source_interface,
+            network_instance,
+            ue_ip_address,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(IeType::SourceInterface as u16);
+        buf.put_u16(self.source_interface.len() as u16);
+        self.source_interface.encode(buf);
+
+        if let Some(ref network_instance) = self.network_instance {
+            buf.put_u16(IeType::NetworkInstance as u16);
+            buf.put_u16(network_instance.len() as u16);
+            network_instance.encode(buf);
+        }
+
+        if let Some(ref ue_ip_address) = self.ue_ip_address {
+            buf.put_u16(IeType::UeIpAddress as u16);
+            buf.put_u16(ue_ip_address.len() as u16);
+            ue_ip_address.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 4 + self.source_interface.len();
+        if let Some(ref network_instance) = self.network_instance {
+            len += 4 + network_instance.len();
+        }
+        if let Some(ref ue_ip_address) = self.ue_ip_address {
+            len += 4 + ue_ip_address.len();
+        }
+        len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreatePdr {
+    pub pdr_id: PdrId,
+    pub precedence: Precedence,
+    pub pdi: Pdi,
+    pub far_id: Option<FarId>,
+}
+
+impl CreatePdr {
+    pub fn new(pdr_id: PdrId, precedence: Precedence, pdi: Pdi) -> Self {
+        CreatePdr {
+            pdr_id,
+            precedence,
+            pdi,
+            far_id: None,
+        }
+    }
+
+    pub fn with_far_id(mut self, far_id: FarId) -> Self {
+        self.far_id = Some(far_id);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut pdr_id = None;
+        let mut precedence = None;
+        let mut pdi = None;
+        let mut far_id = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::PdrId => {
+                    pdr_id = Some(PdrId::parse(&mut value_buf)?);
+                }
+                IeType::Precedence => {
+                    precedence = Some(Precedence::parse(&mut value_buf)?);
+                }
+                IeType::Pdi => {
+                    pdi = Some(Pdi::parse(&mut value_buf)?);
+                }
+                IeType::FarId => {
+                    far_id = Some(FarId::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        let pdr_id = pdr_id.ok_or(IeError::InvalidLength(0))?;
+        let precedence = precedence.ok_or(IeError::InvalidLength(0))?;
+        let pdi = pdi.ok_or(IeError::InvalidLength(0))?;
+
+        Ok(CreatePdr {
+            pdr_id,
+            precedence,
+            pdi,
+            far_id,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(IeType::PdrId as u16);
+        buf.put_u16(self.pdr_id.len() as u16);
+        self.pdr_id.encode(buf);
+
+        buf.put_u16(IeType::Precedence as u16);
+        buf.put_u16(self.precedence.len() as u16);
+        self.precedence.encode(buf);
+
+        buf.put_u16(IeType::Pdi as u16);
+        buf.put_u16(self.pdi.len() as u16);
+        self.pdi.encode(buf);
+
+        if let Some(ref far_id) = self.far_id {
+            buf.put_u16(IeType::FarId as u16);
+            buf.put_u16(far_id.len() as u16);
+            far_id.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 4 + self.pdr_id.len() + 4 + self.precedence.len() + 4 + self.pdi.len();
+        if let Some(ref far_id) = self.far_id {
+            len += 4 + far_id.len();
+        }
+        len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
     RecoveryTimeStamp(RecoveryTimeStamp),
@@ -606,6 +807,8 @@ pub enum InformationElement {
     SourceInterface(SourceInterface),
     DestinationInterface(DestinationInterface),
     ApplyAction(ApplyAction),
+    Pdi(Pdi),
+    CreatePdr(CreatePdr),
 }
 
 impl InformationElement {
@@ -655,6 +858,8 @@ impl InformationElement {
             IeType::ApplyAction => Ok(InformationElement::ApplyAction(
                 ApplyAction::parse(&mut value_buf)?,
             )),
+            IeType::Pdi => Ok(InformationElement::Pdi(Pdi::parse(&mut value_buf)?)),
+            IeType::CreatePdr => Ok(InformationElement::CreatePdr(CreatePdr::parse(&mut value_buf)?)),
         }
     }
 
@@ -714,6 +919,16 @@ impl InformationElement {
                 buf.put_u16(IeType::ApplyAction as u16);
                 buf.put_u16(apply_action.len() as u16);
                 apply_action.encode(buf);
+            }
+            InformationElement::Pdi(pdi) => {
+                buf.put_u16(IeType::Pdi as u16);
+                buf.put_u16(pdi.len() as u16);
+                pdi.encode(buf);
+            }
+            InformationElement::CreatePdr(create_pdr) => {
+                buf.put_u16(IeType::CreatePdr as u16);
+                buf.put_u16(create_pdr.len() as u16);
+                create_pdr.encode(buf);
             }
         }
     }
@@ -1190,6 +1405,154 @@ mod tests {
     fn test_apply_action_ie_encoding() {
         let apply_action = ApplyAction::new(false, true, false);
         let ie = InformationElement::ApplyAction(apply_action);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_pdi_basic() {
+        let pdi = Pdi::new(SourceInterface::Access);
+
+        let mut buf = BytesMut::new();
+        pdi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = Pdi::parse(&mut bytes).unwrap();
+
+        assert_eq!(pdi, parsed);
+    }
+
+    #[test]
+    fn test_pdi_with_network_instance() {
+        let pdi = Pdi::new(SourceInterface::Access)
+            .with_network_instance(NetworkInstance::new("internet".to_string()));
+
+        let mut buf = BytesMut::new();
+        pdi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = Pdi::parse(&mut bytes).unwrap();
+
+        assert_eq!(pdi, parsed);
+    }
+
+    #[test]
+    fn test_pdi_with_ue_ip_address() {
+        let pdi = Pdi::new(SourceInterface::Access)
+            .with_ue_ip_address(UeIpAddress::new(Some(Ipv4Addr::new(10, 0, 0, 1)), None));
+
+        let mut buf = BytesMut::new();
+        pdi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = Pdi::parse(&mut bytes).unwrap();
+
+        assert_eq!(pdi, parsed);
+    }
+
+    #[test]
+    fn test_pdi_complete() {
+        let pdi = Pdi::new(SourceInterface::Access)
+            .with_network_instance(NetworkInstance::new("ims".to_string()))
+            .with_ue_ip_address(UeIpAddress::new(
+                Some(Ipv4Addr::new(192, 168, 1, 100)),
+                Some(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1)),
+            ));
+
+        let mut buf = BytesMut::new();
+        pdi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = Pdi::parse(&mut bytes).unwrap();
+
+        assert_eq!(pdi, parsed);
+    }
+
+    #[test]
+    fn test_pdi_ie_encoding() {
+        let pdi = Pdi::new(SourceInterface::Core)
+            .with_network_instance(NetworkInstance::new("default".to_string()));
+        let ie = InformationElement::Pdi(pdi);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_create_pdr_basic() {
+        let pdr_id = PdrId::new(PDRID(1));
+        let precedence = Precedence::new(100);
+        let pdi = Pdi::new(SourceInterface::Access);
+        let create_pdr = CreatePdr::new(pdr_id, precedence, pdi);
+
+        let mut buf = BytesMut::new();
+        create_pdr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreatePdr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_pdr, parsed);
+    }
+
+    #[test]
+    fn test_create_pdr_with_far_id() {
+        let pdr_id = PdrId::new(PDRID(2));
+        let precedence = Precedence::new(200);
+        let pdi = Pdi::new(SourceInterface::Access)
+            .with_network_instance(NetworkInstance::new("internet".to_string()));
+        let create_pdr = CreatePdr::new(pdr_id, precedence, pdi)
+            .with_far_id(FarId::new(FARID(10)));
+
+        let mut buf = BytesMut::new();
+        create_pdr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreatePdr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_pdr, parsed);
+    }
+
+    #[test]
+    fn test_create_pdr_complete() {
+        let pdr_id = PdrId::new(PDRID(5));
+        let precedence = Precedence::new(500);
+        let pdi = Pdi::new(SourceInterface::Access)
+            .with_network_instance(NetworkInstance::new("ims.apn".to_string()))
+            .with_ue_ip_address(UeIpAddress::new(
+                Some(Ipv4Addr::new(10, 45, 0, 2)),
+                None,
+            ));
+        let create_pdr = CreatePdr::new(pdr_id, precedence, pdi)
+            .with_far_id(FarId::new(FARID(100)));
+
+        let mut buf = BytesMut::new();
+        create_pdr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreatePdr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_pdr, parsed);
+    }
+
+    #[test]
+    fn test_create_pdr_ie_encoding() {
+        let pdr_id = PdrId::new(PDRID(3));
+        let precedence = Precedence::new(300);
+        let pdi = Pdi::new(SourceInterface::Core);
+        let create_pdr = CreatePdr::new(pdr_id, precedence, pdi)
+            .with_far_id(FarId::new(FARID(20)));
+        let ie = InformationElement::CreatePdr(create_pdr);
 
         let mut buf = BytesMut::new();
         ie.encode(&mut buf);
