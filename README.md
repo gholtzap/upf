@@ -123,6 +123,12 @@
 - Parse and encode functions
 - Full test coverage
 
+## 25. Create FAR Information Element
+- IE type and structure definition
+- Grouped IE containing FAR ID, Apply Action, and Destination Interface
+- Parse and encode functions
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -131,20 +137,13 @@
 
 #### 1.1.4 PFCP Session Establishment
 
-##### 1.1.4.1 Create FAR (Forwarding Action Rule) IE
-- FAR ID
-- Apply Action (Forward/Drop/Buffer)
-- Forwarding Parameters
-- Destination Interface
-- Parse and encode functions
-
-##### 1.1.4.2 Session Establishment Request/Response parsing
+##### 1.1.4.1 Session Establishment Request/Response parsing
 - Message structure for Session Establishment Request
 - Message structure for Session Establishment Response
 - Integration with existing message parsing framework
 - Cause value handling
 
-##### 1.1.4.3 Session store integration
+##### 1.1.4.2 Session store integration
 - Session creation in HashMap
 - SEID to Session mapping
 - PDR and FAR association with sessions

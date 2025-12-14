@@ -30,6 +30,7 @@ pub type IeResult<T> = Result<T, IeError>;
 pub enum IeType {
     CreatePdr = 1,
     Pdi = 2,
+    CreateFar = 3,
     SourceInterface = 20,
     NetworkInstance = 22,
     Precedence = 29,
@@ -48,6 +49,7 @@ impl IeType {
         match value {
             1 => Ok(IeType::CreatePdr),
             2 => Ok(IeType::Pdi),
+            3 => Ok(IeType::CreateFar),
             20 => Ok(IeType::SourceInterface),
             22 => Ok(IeType::NetworkInstance),
             29 => Ok(IeType::Precedence),
@@ -795,6 +797,94 @@ impl CreatePdr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CreateFar {
+    pub far_id: FarId,
+    pub apply_action: ApplyAction,
+    pub destination_interface: Option<DestinationInterface>,
+}
+
+impl CreateFar {
+    pub fn new(far_id: FarId, apply_action: ApplyAction) -> Self {
+        CreateFar {
+            far_id,
+            apply_action,
+            destination_interface: None,
+        }
+    }
+
+    pub fn with_destination_interface(mut self, destination_interface: DestinationInterface) -> Self {
+        self.destination_interface = Some(destination_interface);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut far_id = None;
+        let mut apply_action = None;
+        let mut destination_interface = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::FarId => {
+                    far_id = Some(FarId::parse(&mut value_buf)?);
+                }
+                IeType::ApplyAction => {
+                    apply_action = Some(ApplyAction::parse(&mut value_buf)?);
+                }
+                IeType::DestinationInterface => {
+                    destination_interface = Some(DestinationInterface::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        let far_id = far_id.ok_or(IeError::InvalidLength(0))?;
+        let apply_action = apply_action.ok_or(IeError::InvalidLength(0))?;
+
+        Ok(CreateFar {
+            far_id,
+            apply_action,
+            destination_interface,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(IeType::FarId as u16);
+        buf.put_u16(self.far_id.len() as u16);
+        self.far_id.encode(buf);
+
+        buf.put_u16(IeType::ApplyAction as u16);
+        buf.put_u16(self.apply_action.len() as u16);
+        self.apply_action.encode(buf);
+
+        if let Some(ref destination_interface) = self.destination_interface {
+            buf.put_u16(IeType::DestinationInterface as u16);
+            buf.put_u16(destination_interface.len() as u16);
+            destination_interface.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 4 + self.far_id.len() + 4 + self.apply_action.len();
+        if let Some(ref destination_interface) = self.destination_interface {
+            len += 4 + destination_interface.len();
+        }
+        len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
     RecoveryTimeStamp(RecoveryTimeStamp),
@@ -809,6 +899,7 @@ pub enum InformationElement {
     ApplyAction(ApplyAction),
     Pdi(Pdi),
     CreatePdr(CreatePdr),
+    CreateFar(CreateFar),
 }
 
 impl InformationElement {
@@ -860,6 +951,7 @@ impl InformationElement {
             )),
             IeType::Pdi => Ok(InformationElement::Pdi(Pdi::parse(&mut value_buf)?)),
             IeType::CreatePdr => Ok(InformationElement::CreatePdr(CreatePdr::parse(&mut value_buf)?)),
+            IeType::CreateFar => Ok(InformationElement::CreateFar(CreateFar::parse(&mut value_buf)?)),
         }
     }
 
@@ -929,6 +1021,11 @@ impl InformationElement {
                 buf.put_u16(IeType::CreatePdr as u16);
                 buf.put_u16(create_pdr.len() as u16);
                 create_pdr.encode(buf);
+            }
+            InformationElement::CreateFar(create_far) => {
+                buf.put_u16(IeType::CreateFar as u16);
+                buf.put_u16(create_far.len() as u16);
+                create_far.encode(buf);
             }
         }
     }
@@ -1553,6 +1650,116 @@ mod tests {
         let create_pdr = CreatePdr::new(pdr_id, precedence, pdi)
             .with_far_id(FarId::new(FARID(20)));
         let ie = InformationElement::CreatePdr(create_pdr);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_create_far_basic() {
+        let far_id = FarId::new(FARID(1));
+        let apply_action = ApplyAction::new(false, true, false);
+        let create_far = CreateFar::new(far_id, apply_action);
+
+        let mut buf = BytesMut::new();
+        create_far.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateFar::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_far, parsed);
+    }
+
+    #[test]
+    fn test_create_far_with_destination_interface() {
+        let far_id = FarId::new(FARID(2));
+        let apply_action = ApplyAction::new(false, true, false);
+        let create_far = CreateFar::new(far_id, apply_action)
+            .with_destination_interface(DestinationInterface::Core);
+
+        let mut buf = BytesMut::new();
+        create_far.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateFar::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_far, parsed);
+    }
+
+    #[test]
+    fn test_create_far_drop_action() {
+        let far_id = FarId::new(FARID(10));
+        let apply_action = ApplyAction::new(true, false, false);
+        let create_far = CreateFar::new(far_id, apply_action);
+
+        let mut buf = BytesMut::new();
+        create_far.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateFar::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_far, parsed);
+    }
+
+    #[test]
+    fn test_create_far_buffer_action() {
+        let far_id = FarId::new(FARID(15));
+        let apply_action = ApplyAction::new(false, false, true);
+        let create_far = CreateFar::new(far_id, apply_action);
+
+        let mut buf = BytesMut::new();
+        create_far.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateFar::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_far, parsed);
+    }
+
+    #[test]
+    fn test_create_far_forward_to_access() {
+        let far_id = FarId::new(FARID(20));
+        let apply_action = ApplyAction::new(false, true, false);
+        let create_far = CreateFar::new(far_id, apply_action)
+            .with_destination_interface(DestinationInterface::Access);
+
+        let mut buf = BytesMut::new();
+        create_far.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateFar::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_far, parsed);
+    }
+
+    #[test]
+    fn test_create_far_forward_to_n6() {
+        let far_id = FarId::new(FARID(30));
+        let apply_action = ApplyAction::new(false, true, false);
+        let create_far = CreateFar::new(far_id, apply_action)
+            .with_destination_interface(DestinationInterface::SgiLanN6Lan);
+
+        let mut buf = BytesMut::new();
+        create_far.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateFar::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_far, parsed);
+    }
+
+    #[test]
+    fn test_create_far_ie_encoding() {
+        let far_id = FarId::new(FARID(100));
+        let apply_action = ApplyAction::new(false, true, false);
+        let create_far = CreateFar::new(far_id, apply_action)
+            .with_destination_interface(DestinationInterface::Core);
+        let ie = InformationElement::CreateFar(create_far);
 
         let mut buf = BytesMut::new();
         ie.encode(&mut buf);
