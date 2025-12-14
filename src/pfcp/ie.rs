@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
-use crate::types::identifiers::{SEID, PDRID};
+use crate::types::identifiers::{SEID, PDRID, FARID};
 
 #[derive(Debug, Error)]
 pub enum IeError {
@@ -17,6 +17,10 @@ pub enum IeError {
     InvalidFqdn,
     #[error("UTF-8 decode error: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
+    #[error("Invalid source interface: {0}")]
+    InvalidSourceInterface(u8),
+    #[error("Invalid destination interface: {0}")]
+    InvalidDestinationInterface(u8),
 }
 
 pub type IeResult<T> = Result<T, IeError>;
@@ -26,10 +30,15 @@ pub type IeResult<T> = Result<T, IeError>;
 pub enum IeType {
     RecoveryTimeStamp = 96,
     UeIpAddress = 93,
+    FarId = 108,
     NodeId = 60,
     FSeid = 57,
     PdrId = 56,
+    ApplyAction = 44,
+    DestinationInterface = 42,
+    Precedence = 29,
     NetworkInstance = 22,
+    SourceInterface = 20,
 }
 
 impl IeType {
@@ -37,10 +46,15 @@ impl IeType {
         match value {
             96 => Ok(IeType::RecoveryTimeStamp),
             93 => Ok(IeType::UeIpAddress),
+            108 => Ok(IeType::FarId),
             60 => Ok(IeType::NodeId),
             57 => Ok(IeType::FSeid),
             56 => Ok(IeType::PdrId),
+            44 => Ok(IeType::ApplyAction),
+            42 => Ok(IeType::DestinationInterface),
+            29 => Ok(IeType::Precedence),
             22 => Ok(IeType::NetworkInstance),
+            20 => Ok(IeType::SourceInterface),
             _ => Err(IeError::InvalidType(value)),
         }
     }
@@ -383,6 +397,202 @@ impl PdrId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FarId(pub FARID);
+
+impl FarId {
+    pub fn new(id: FARID) -> Self {
+        FarId(id)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(FarId(FARID(buf.get_u32())))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Precedence(pub u32);
+
+impl Precedence {
+    pub fn new(value: u32) -> Self {
+        Precedence(value)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(Precedence(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceInterface {
+    Access = 0,
+    Core = 1,
+    SgiLanN6Lan = 2,
+    CpFunction = 3,
+}
+
+impl SourceInterface {
+    pub fn from_u8(value: u8) -> IeResult<Self> {
+        match value {
+            0 => Ok(SourceInterface::Access),
+            1 => Ok(SourceInterface::Core),
+            2 => Ok(SourceInterface::SgiLanN6Lan),
+            3 => Ok(SourceInterface::CpFunction),
+            _ => Err(IeError::InvalidSourceInterface(value)),
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+        let value = buf.get_u8() & 0x0F;
+        Self::from_u8(value)
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u8(*self as u8);
+    }
+
+    pub fn len(&self) -> usize {
+        1
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DestinationInterface {
+    Access = 0,
+    Core = 1,
+    SgiLanN6Lan = 2,
+    CpFunction = 3,
+    LiFunction = 4,
+}
+
+impl DestinationInterface {
+    pub fn from_u8(value: u8) -> IeResult<Self> {
+        match value {
+            0 => Ok(DestinationInterface::Access),
+            1 => Ok(DestinationInterface::Core),
+            2 => Ok(DestinationInterface::SgiLanN6Lan),
+            3 => Ok(DestinationInterface::CpFunction),
+            4 => Ok(DestinationInterface::LiFunction),
+            _ => Err(IeError::InvalidDestinationInterface(value)),
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+        let value = buf.get_u8() & 0x0F;
+        Self::from_u8(value)
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u8(*self as u8);
+    }
+
+    pub fn len(&self) -> usize {
+        1
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApplyAction {
+    pub drop: bool,
+    pub forward: bool,
+    pub buffer: bool,
+    pub notify_cp: bool,
+    pub duplicate: bool,
+}
+
+impl ApplyAction {
+    pub fn new(drop: bool, forward: bool, buffer: bool) -> Self {
+        ApplyAction {
+            drop,
+            forward,
+            buffer,
+            notify_cp: false,
+            duplicate: false,
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+        let flags = buf.get_u8();
+        Ok(ApplyAction {
+            drop: (flags & 0x01) != 0,
+            forward: (flags & 0x02) != 0,
+            buffer: (flags & 0x04) != 0,
+            notify_cp: (flags & 0x08) != 0,
+            duplicate: (flags & 0x10) != 0,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        let mut flags = 0u8;
+        if self.drop {
+            flags |= 0x01;
+        }
+        if self.forward {
+            flags |= 0x02;
+        }
+        if self.buffer {
+            flags |= 0x04;
+        }
+        if self.notify_cp {
+            flags |= 0x08;
+        }
+        if self.duplicate {
+            flags |= 0x10;
+        }
+        buf.put_u8(flags);
+    }
+
+    pub fn len(&self) -> usize {
+        1
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
@@ -390,7 +600,12 @@ pub enum InformationElement {
     UeIpAddress(UeIpAddress),
     FSeid(FSeid),
     PdrId(PdrId),
+    FarId(FarId),
     NetworkInstance(NetworkInstance),
+    Precedence(Precedence),
+    SourceInterface(SourceInterface),
+    DestinationInterface(DestinationInterface),
+    ApplyAction(ApplyAction),
 }
 
 impl InformationElement {
@@ -424,8 +639,21 @@ impl InformationElement {
             )),
             IeType::FSeid => Ok(InformationElement::FSeid(FSeid::parse(&mut value_buf)?)),
             IeType::PdrId => Ok(InformationElement::PdrId(PdrId::parse(&mut value_buf)?)),
+            IeType::FarId => Ok(InformationElement::FarId(FarId::parse(&mut value_buf)?)),
             IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
                 NetworkInstance::parse(&mut value_buf)?,
+            )),
+            IeType::Precedence => Ok(InformationElement::Precedence(
+                Precedence::parse(&mut value_buf)?,
+            )),
+            IeType::SourceInterface => Ok(InformationElement::SourceInterface(
+                SourceInterface::parse(&mut value_buf)?,
+            )),
+            IeType::DestinationInterface => Ok(InformationElement::DestinationInterface(
+                DestinationInterface::parse(&mut value_buf)?,
+            )),
+            IeType::ApplyAction => Ok(InformationElement::ApplyAction(
+                ApplyAction::parse(&mut value_buf)?,
             )),
         }
     }
@@ -457,10 +685,35 @@ impl InformationElement {
                 buf.put_u16(pdr_id.len() as u16);
                 pdr_id.encode(buf);
             }
+            InformationElement::FarId(far_id) => {
+                buf.put_u16(IeType::FarId as u16);
+                buf.put_u16(far_id.len() as u16);
+                far_id.encode(buf);
+            }
             InformationElement::NetworkInstance(network_instance) => {
                 buf.put_u16(IeType::NetworkInstance as u16);
                 buf.put_u16(network_instance.len() as u16);
                 network_instance.encode(buf);
+            }
+            InformationElement::Precedence(precedence) => {
+                buf.put_u16(IeType::Precedence as u16);
+                buf.put_u16(precedence.len() as u16);
+                precedence.encode(buf);
+            }
+            InformationElement::SourceInterface(source_interface) => {
+                buf.put_u16(IeType::SourceInterface as u16);
+                buf.put_u16(source_interface.len() as u16);
+                source_interface.encode(buf);
+            }
+            InformationElement::DestinationInterface(destination_interface) => {
+                buf.put_u16(IeType::DestinationInterface as u16);
+                buf.put_u16(destination_interface.len() as u16);
+                destination_interface.encode(buf);
+            }
+            InformationElement::ApplyAction(apply_action) => {
+                buf.put_u16(IeType::ApplyAction as u16);
+                buf.put_u16(apply_action.len() as u16);
+                apply_action.encode(buf);
             }
         }
     }
@@ -758,5 +1011,192 @@ mod tests {
         let parsed = PdrId::parse(&mut bytes).unwrap();
 
         assert_eq!(pdr_id, parsed);
+    }
+
+    #[test]
+    fn test_far_id() {
+        let far_id = FarId::new(FARID(42));
+
+        let mut buf = BytesMut::new();
+        far_id.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = FarId::parse(&mut bytes).unwrap();
+
+        assert_eq!(far_id, parsed);
+    }
+
+    #[test]
+    fn test_far_id_ie_encoding() {
+        let far_id = FarId::new(FARID(1234));
+        let ie = InformationElement::FarId(far_id);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_precedence() {
+        let precedence = Precedence::new(100);
+
+        let mut buf = BytesMut::new();
+        precedence.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = Precedence::parse(&mut bytes).unwrap();
+
+        assert_eq!(precedence, parsed);
+    }
+
+    #[test]
+    fn test_precedence_ie_encoding() {
+        let precedence = Precedence::new(255);
+        let ie = InformationElement::Precedence(precedence);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_source_interface_access() {
+        let source_interface = SourceInterface::Access;
+
+        let mut buf = BytesMut::new();
+        source_interface.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = SourceInterface::parse(&mut bytes).unwrap();
+
+        assert_eq!(source_interface, parsed);
+    }
+
+    #[test]
+    fn test_source_interface_core() {
+        let source_interface = SourceInterface::Core;
+
+        let mut buf = BytesMut::new();
+        source_interface.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = SourceInterface::parse(&mut bytes).unwrap();
+
+        assert_eq!(source_interface, parsed);
+    }
+
+    #[test]
+    fn test_source_interface_ie_encoding() {
+        let source_interface = SourceInterface::Access;
+        let ie = InformationElement::SourceInterface(source_interface);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_destination_interface_access() {
+        let destination_interface = DestinationInterface::Access;
+
+        let mut buf = BytesMut::new();
+        destination_interface.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = DestinationInterface::parse(&mut bytes).unwrap();
+
+        assert_eq!(destination_interface, parsed);
+    }
+
+    #[test]
+    fn test_destination_interface_core() {
+        let destination_interface = DestinationInterface::Core;
+
+        let mut buf = BytesMut::new();
+        destination_interface.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = DestinationInterface::parse(&mut bytes).unwrap();
+
+        assert_eq!(destination_interface, parsed);
+    }
+
+    #[test]
+    fn test_destination_interface_ie_encoding() {
+        let destination_interface = DestinationInterface::Core;
+        let ie = InformationElement::DestinationInterface(destination_interface);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_apply_action_forward() {
+        let apply_action = ApplyAction::new(false, true, false);
+
+        let mut buf = BytesMut::new();
+        apply_action.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = ApplyAction::parse(&mut bytes).unwrap();
+
+        assert_eq!(apply_action, parsed);
+    }
+
+    #[test]
+    fn test_apply_action_drop() {
+        let apply_action = ApplyAction::new(true, false, false);
+
+        let mut buf = BytesMut::new();
+        apply_action.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = ApplyAction::parse(&mut bytes).unwrap();
+
+        assert_eq!(apply_action, parsed);
+    }
+
+    #[test]
+    fn test_apply_action_buffer() {
+        let apply_action = ApplyAction::new(false, false, true);
+
+        let mut buf = BytesMut::new();
+        apply_action.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = ApplyAction::parse(&mut bytes).unwrap();
+
+        assert_eq!(apply_action, parsed);
+    }
+
+    #[test]
+    fn test_apply_action_ie_encoding() {
+        let apply_action = ApplyAction::new(false, true, false);
+        let ie = InformationElement::ApplyAction(apply_action);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
     }
 }

@@ -81,6 +81,36 @@
 - Parse and encode functions
 - Full test coverage
 
+## 18. FAR ID Information Element
+- IE type and structure definition
+- FAR ID encoding/decoding (u32)
+- Parse and encode functions
+- Full test coverage
+
+## 19. Precedence Information Element
+- IE type and structure definition
+- Precedence value encoding/decoding (u32)
+- Parse and encode functions
+- Full test coverage
+
+## 20. Source Interface Information Element
+- IE type and structure definition
+- Interface type enumeration (Access, Core, SGi-LAN/N6-LAN, CP-Function)
+- Parse and encode functions
+- Full test coverage
+
+## 21. Destination Interface Information Element
+- IE type and structure definition
+- Interface type enumeration (Access, Core, SGi-LAN/N6-LAN, CP-Function, LI Function)
+- Parse and encode functions
+- Full test coverage
+
+## 22. Apply Action Information Element
+- IE type and structure definition
+- Action flags (DROP, FORWARD, BUFFER, NOCP, DUPL)
+- Parse and encode functions
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
