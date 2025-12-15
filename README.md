@@ -172,6 +172,18 @@
 - Session statistics updates (uplink packets/bytes)
 - Concurrent operation with PFCP server
 
+## 31. N6 Interface Handler
+- Channel-based communication between N3 and N6 handlers
+- Uplink packet forwarding (N3 -> N6)
+- IP packet parsing and logging (IPv4 and IPv6)
+- Destination IP extraction
+- Integration with session manager
+- Downlink packet encapsulation support (N6 -> N3)
+- Session lookup by UE IP address
+- GTP-U encapsulation for downlink traffic
+- Session statistics updates (downlink packets/bytes)
+- Concurrent operation with N3 and PFCP handlers
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -207,12 +219,6 @@
 #### 1.2.5 GTP-U End Marker
 - End Marker message parsing
 - Path switch support
-
-#### 1.2.6 N6 Interface Handler
-- Raw socket or TAP interface setup
-- Plain IP packet forwarding to internet
-- Encapsulation logic for downlink
-- Integration with session store
 
 ### 1.3 Basic IP Routing
 - IPv4 packet forwarding

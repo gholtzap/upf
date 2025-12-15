@@ -30,6 +30,11 @@ impl SessionManager {
         sessions.values().find(|s| s.uplink_teid == *teid).cloned()
     }
 
+    pub fn get_session_by_ue_ip(&self, ue_ip: &std::net::IpAddr) -> Option<Session> {
+        let sessions = self.sessions.lock().unwrap();
+        sessions.values().find(|s| s.ue_ip == *ue_ip).cloned()
+    }
+
     pub fn remove_session(&self, seid: &SEID) -> Option<Session> {
         let mut sessions = self.sessions.lock().unwrap();
         sessions.remove(&seid.0)

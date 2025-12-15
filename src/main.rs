@@ -7,7 +7,8 @@ use anyhow::Result;
 use clap::Parser;
 use log::{info, error};
 use pfcp::PfcpServer;
-use gtpu::N3Handler;
+use gtpu::{N3Handler, N6Handler};
+use tokio::sync::mpsc;
 
 #[derive(Parser, Debug)]
 #[command(name = "upf")]
@@ -36,7 +37,11 @@ async fn main() -> Result<()> {
     let pfcp_server = PfcpServer::new(config.n4_address.to_string(), config.upf_node_id.clone()).await?;
     let session_manager = pfcp_server.session_manager();
 
-    let n3_handler = N3Handler::new(config.n3_address, session_manager).await?;
+    let (uplink_tx, uplink_rx) = mpsc::channel(1000);
+
+    let n3_handler = N3Handler::new(config.n3_address, session_manager.clone(), Some(uplink_tx)).await?;
+    let n6_handler = N6Handler::new(session_manager, uplink_rx, config.n6_interface.clone());
+
     info!("UPF initialized successfully");
 
     let pfcp_task = tokio::spawn(async move {
@@ -51,12 +56,21 @@ async fn main() -> Result<()> {
         }
     });
 
+    let n6_task = tokio::spawn(async move {
+        if let Err(e) = n6_handler.run().await {
+            error!("N6 handler error: {}", e);
+        }
+    });
+
     tokio::select! {
         _ = pfcp_task => {
             error!("PFCP server terminated");
         }
         _ = n3_task => {
             error!("N3 handler terminated");
+        }
+        _ = n6_task => {
+            error!("N6 handler terminated");
         }
     }
 

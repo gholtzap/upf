@@ -2,26 +2,34 @@ use super::echo::{create_echo_response, is_echo_request};
 use super::gpdu::{parse_and_process_gpdu, GPduInfo};
 use super::header::{GtpuError, GtpuMessage};
 use crate::pfcp::session_manager::SessionManager;
+use crate::types::UplinkPacket;
 use anyhow::Result;
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
 
 pub struct N3Handler {
     socket: Arc<UdpSocket>,
     session_manager: SessionManager,
+    uplink_sender: Option<mpsc::Sender<UplinkPacket>>,
 }
 
 impl N3Handler {
-    pub async fn new(bind_addr: SocketAddr, session_manager: SessionManager) -> Result<Self> {
+    pub async fn new(
+        bind_addr: SocketAddr,
+        session_manager: SessionManager,
+        uplink_sender: Option<mpsc::Sender<UplinkPacket>>,
+    ) -> Result<Self> {
         let socket = UdpSocket::bind(bind_addr).await?;
         info!("N3 interface bound to {}", bind_addr);
 
         Ok(Self {
             socket: Arc::new(socket),
             session_manager,
+            uplink_sender,
         })
     }
 
@@ -116,6 +124,19 @@ impl N3Handler {
                     gpdu_info.payload.len(),
                     gpdu_info.qfi
                 );
+
+                if let Some(sender) = &self.uplink_sender {
+                    let uplink_packet = UplinkPacket {
+                        ue_ip: session.ue_ip,
+                        payload: gpdu_info.payload,
+                    };
+
+                    if let Err(e) = sender.send(uplink_packet).await {
+                        error!("Failed to forward uplink packet to N6: {}", e);
+                    } else {
+                        debug!("Forwarded uplink packet to N6 interface");
+                    }
+                }
 
                 Ok(())
             }
