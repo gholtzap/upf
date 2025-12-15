@@ -8,6 +8,7 @@ use std::path::Path;
 pub struct Config {
     pub n4_address: SocketAddr,
     pub n3_address: SocketAddr,
+    pub n6_address: SocketAddr,
     pub n6_interface: String,
     pub upf_node_id: String,
     #[serde(default = "default_log_level")]

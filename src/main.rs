@@ -33,6 +33,7 @@ async fn main() -> Result<()> {
     info!("Starting UPF");
     info!("N4 (PFCP) address: {}", config.n4_address);
     info!("N3 (GTP-U) address: {}", config.n3_address);
+    info!("N6 address: {}", config.n6_address);
     info!("N6 interface: {}", config.n6_interface);
     info!("UPF Node ID: {}", config.upf_node_id);
 
@@ -42,7 +43,13 @@ async fn main() -> Result<()> {
     let (uplink_tx, uplink_rx) = mpsc::channel(1000);
 
     let n3_handler = N3Handler::new(config.n3_address, session_manager.clone(), Some(uplink_tx)).await?;
-    let n6_handler = N6Handler::new(session_manager, uplink_rx, config.n6_interface.clone());
+    let n6_handler = N6Handler::new(
+        session_manager,
+        uplink_rx,
+        config.n6_address,
+        config.n3_address,
+        config.n6_interface.clone()
+    ).await?;
 
     info!("UPF initialized successfully");
 

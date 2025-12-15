@@ -244,6 +244,25 @@
 - Session statistics updated only for successfully forwarded packets
 - Detailed logging of PDR/FAR matching and forwarding decisions
 
+## 38. N6 Downlink Reception
+- UDP socket on N6 interface for downlink packet reception
+- Parse IP headers to extract destination UE IP address (IPv4 and IPv6)
+- Session lookup by UE IP address
+- Concurrent reception with uplink packet processing
+- Integration with session manager
+
+## 39. Downlink Packet Processing Integration
+- PDR matching integrated into N6 downlink path
+- PacketContext creation with source interface (Core) and destination UE IP
+- FAR actions applied for downlink traffic (Forward/Drop/Buffer)
+- Forward action: GTP-U encapsulation and transmission to RAN with correct TEID
+- Drop action: packets dropped and logged
+- Buffer action: logged as not yet implemented, packets dropped
+- No matching PDR: packets dropped and logged with warning
+- Session statistics updated for downlink packets (packets/bytes)
+- Detailed logging of PDR/FAR matching and forwarding decisions
+- Complete bidirectional packet flow (uplink and downlink)
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -282,18 +301,6 @@
 - Forward uplink IP packets to internet/data network
 - Remove GTP-U encapsulation (already done)
 - Send packets to destination based on IP routing
-
-### 2.3 N6 Downlink Reception
-- Receive downlink packets from internet/data network on N6
-- Parse IP headers to extract destination UE IP
-- Look up session by UE IP address
-- Forward to N3 interface for GTP-U encapsulation
-
-### 2.4 Downlink Packet Processing Integration
-- Integrate PDR matching into N6 downlink path
-- Apply FAR actions for downlink traffic
-- Add GTP-U encapsulation for packets to UE
-- Send to RAN with correct TEID
 
 ### 2.5 Basic QoS
 - Simple priority queue (2 levels: high priority, normal)
