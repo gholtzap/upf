@@ -263,6 +263,17 @@
 - Detailed logging of PDR/FAR matching and forwarding decisions
 - Complete bidirectional packet flow (uplink and downlink)
 
+## 40. N6 Uplink Forwarding to Data Network
+- Raw socket creation for IPv4 and IPv6 packet forwarding
+- Platform-specific implementations (Unix/Linux and Windows support)
+- IP_HDRINCL/IPV6_HDRINCL socket options for custom IP header support
+- Destination IP parsing from IP packet headers (IPv4 and IPv6)
+- Actual packet transmission to internet/data network via raw sockets
+- Comprehensive error handling with fallback for unavailable raw sockets
+- Graceful degradation when raw socket creation fails
+- Detailed logging of forwarding operations and errors
+- Cross-platform compatibility with conditional compilation
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -295,12 +306,6 @@
 - ARP resolution for next-hop
 
 ## 2. Packet Processing (Simplified)
-
-### 2.2 Actual N6 Uplink Forwarding
-- Create TUN/TAP interface or raw socket for N6
-- Forward uplink IP packets to internet/data network
-- Remove GTP-U encapsulation (already done)
-- Send packets to destination based on IP routing
 
 ### 2.5 Basic QoS
 - Simple priority queue (2 levels: high priority, normal)
