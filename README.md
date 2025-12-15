@@ -214,6 +214,15 @@
 - Session context validation
 - Error handling for missing sessions
 
+## 35. PDR Matching Engine
+- Packet classifier module for PDR matching
+- Match packets against PDR rules based on source interface
+- Match uplink packets by TEID (Access interface)
+- Match downlink packets by UE IP address (Core interface)
+- Precedence-based PDR selection (highest precedence wins)
+- Return matched PDR and associated FAR ID
+- Full test coverage for all matching scenarios
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -247,30 +256,38 @@
 
 ## 2. Packet Processing (Simplified)
 
-### 2.1 Receive Packets
-- Raw socket or libpcap for packet I/O
-- Read packets from network interfaces
-- Parse Ethernet/IP/UDP/GTP headers
+### 2.1 FAR Application Engine
+- Create forwarding action module
+- Apply Forward action (route to destination interface)
+- Apply Drop action (discard packet)
+- Apply Buffer action (queue packet temporarily)
+- Look up FAR by ID from matched PDR
 
-### 2.2 Classify Packets
-**Uplink (from UE):**
-- Match on GTP-U TEID from N3 interface
-- Look up session by TEID
-- Apply matching PDR rules
+### 2.2 Uplink Packet Processing Integration
+- Integrate PDR matching into N3 handler
+- Apply FAR actions for uplink traffic
+- Forward matching packets to N6 interface
+- Drop packets when FAR specifies Drop action
 
-**Downlink (to UE):**
-- Match on destination IP address from N6 interface
-- Look up session by UE IP
-- Apply matching PDR rules
+### 2.3 Actual N6 Uplink Forwarding
+- Create TUN/TAP interface or raw socket for N6
+- Forward uplink IP packets to internet/data network
+- Remove GTP-U encapsulation (already done)
+- Send packets to destination based on IP routing
 
-### 2.3 Forward Packets
-**Based on FAR action:**
-- Forward to N6: Strip GTP header, send to internet
-- Forward to N3: Add GTP header, send to base station
-- Drop: Discard packet
-- Buffer: Store temporarily (basic queue)
+### 2.4 N6 Downlink Reception
+- Receive downlink packets from internet/data network on N6
+- Parse IP headers to extract destination UE IP
+- Look up session by UE IP address
+- Forward to N3 interface for GTP-U encapsulation
 
-### 2.4 Basic QoS
+### 2.5 Downlink Packet Processing Integration
+- Integrate PDR matching into N6 downlink path
+- Apply FAR actions for downlink traffic
+- Add GTP-U encapsulation for packets to UE
+- Send to RAN with correct TEID
+
+### 2.6 Basic QoS
 - Simple priority queue (2 levels: high priority, normal)
 - Basic rate limiting per session (token bucket)
 - No fancy scheduling needed initially

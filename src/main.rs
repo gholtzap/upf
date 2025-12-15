@@ -2,6 +2,7 @@ mod config;
 mod types;
 mod pfcp;
 mod gtpu;
+mod packet_classifier;
 
 use anyhow::Result;
 use clap::Parser;
