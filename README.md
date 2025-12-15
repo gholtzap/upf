@@ -146,6 +146,14 @@
 - Extension header support structure
 - Full test coverage
 
+## 28. GTP-U Echo Request/Response
+- Echo Request message creation
+- Echo Response message generation
+- Recovery counter management with atomic operations
+- Sequence number preservation in responses
+- Health check mechanism support
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -173,12 +181,6 @@
 - Apply Action (Forward/Drop/Buffer)
 
 ### 1.2 GTP-U Protocol Foundation
-#### 1.2.2 GTP-U Echo Request/Response
-- Echo Request parsing
-- Echo Response generation
-- Health check mechanism
-- Recovery counter handling
-
 #### 1.2.3 GTP-U G-PDU Handling
 - G-PDU message parsing
 - Payload extraction
