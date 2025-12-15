@@ -36,3 +36,12 @@ impl fmt::Display for FARID {
         write!(f, "{}", self.0)
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct QFI(pub u8);
+
+impl fmt::Display for QFI {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

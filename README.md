@@ -154,6 +154,15 @@
 - Health check mechanism support
 - Full test coverage
 
+## 29. GTP-U G-PDU Handling
+- G-PDU message parsing
+- Payload extraction
+- TEID to session lookup support
+- Extension header parsing (QFI from PDU Session Container)
+- QFI type definition
+- SessionManager TEID-based lookup
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -181,12 +190,6 @@
 - Apply Action (Forward/Drop/Buffer)
 
 ### 1.2 GTP-U Protocol Foundation
-#### 1.2.3 GTP-U G-PDU Handling
-- G-PDU message parsing
-- Payload extraction
-- TEID to session lookup
-- Extension header parsing (QFI)
-
 #### 1.2.4 GTP-U Error Indication
 - Error Indication message generation
 - Peer address information

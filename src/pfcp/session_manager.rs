@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use crate::types::session::Session;
-use crate::types::identifiers::SEID;
+use crate::types::identifiers::{SEID, TEID};
 
 #[derive(Debug, Clone)]
 pub struct SessionManager {
@@ -23,6 +23,11 @@ impl SessionManager {
     pub fn get_session(&self, seid: &SEID) -> Option<Session> {
         let sessions = self.sessions.lock().unwrap();
         sessions.get(&seid.0).cloned()
+    }
+
+    pub fn get_session_by_teid(&self, teid: &TEID) -> Option<Session> {
+        let sessions = self.sessions.lock().unwrap();
+        sessions.values().find(|s| s.uplink_teid == *teid).cloned()
     }
 
     pub fn remove_session(&self, seid: &SEID) -> Option<Session> {
