@@ -129,25 +129,20 @@
 - Parse and encode functions
 - Full test coverage
 
+## 26. PFCP Session Establishment
+- Session Establishment Request message parsing
+- Session Establishment Response message generation
+- Session store with thread-safe HashMap
+- SEID to Session mapping
+- PDR and FAR association with sessions
+- Integration with PfcpServer
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
 ### 1.1 PFCP (N4 Interface - UPF to SMF)
 **Purpose:** Control plane communication with SMF
-
-#### 1.1.4 PFCP Session Establishment
-
-##### 1.1.4.1 Session Establishment Request/Response parsing
-- Message structure for Session Establishment Request
-- Message structure for Session Establishment Response
-- Integration with existing message parsing framework
-- Cause value handling
-
-##### 1.1.4.2 Session store integration
-- Session creation in HashMap
-- SEID to Session mapping
-- PDR and FAR association with sessions
-- Thread-safe session management
 
 #### 1.1.5 PFCP Session Modification
 - Session Modification Request/Response parsing

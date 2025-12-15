@@ -1,8 +1,13 @@
 use super::header::{PfcpMessage, Result};
 use super::types::{MessageType, PFCP_PORT, CauseValue};
-use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse};
+use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest, SessionEstablishmentResponse};
 use super::association::{Association, AssociationManager};
-use super::ie::{NodeId, RecoveryTimeStamp};
+use super::session_manager::SessionManager;
+use super::ie::{NodeId, RecoveryTimeStamp, FSeid, SourceInterface, DestinationInterface};
+use crate::types::session::{Session, SessionStats, SessionStatus};
+use crate::types::identifiers::{SEID, TEID};
+use crate::types::pdr::{PDR, PDI, SourceInterface as PdrSourceInterface};
+use crate::types::far::{FAR, ForwardingAction, DestinationInterface as FarDestinationInterface};
 use bytes::Bytes;
 use log::{debug, error, info, warn};
 use std::net::{SocketAddr, IpAddr};
@@ -16,6 +21,7 @@ pub struct PfcpServer {
     socket: Arc<UdpSocket>,
     sequence_number: Arc<Mutex<u32>>,
     association_manager: AssociationManager,
+    session_manager: SessionManager,
     upf_node_id: NodeId,
     recovery_time_stamp: RecoveryTimeStamp,
 }
@@ -42,6 +48,7 @@ impl PfcpServer {
             socket: Arc::new(socket),
             sequence_number: Arc::new(Mutex::new(1)),
             association_manager: AssociationManager::new(),
+            session_manager: SessionManager::new(),
             upf_node_id: node_id,
             recovery_time_stamp: RecoveryTimeStamp::now(),
         })
@@ -83,7 +90,7 @@ impl PfcpServer {
                 self.handle_association_setup_request(&message, peer_addr).await?;
             }
             MessageType::SessionEstablishmentRequest => {
-                warn!("Session establishment not yet implemented");
+                self.handle_session_establishment_request(&message, peer_addr).await?;
             }
             MessageType::SessionModificationRequest => {
                 warn!("Session modification not yet implemented");
@@ -180,6 +187,151 @@ impl PfcpServer {
 
         self.send_message(&response, peer_addr).await?;
         info!("Association established with {}", peer_addr);
+
+        Ok(())
+    }
+
+    async fn handle_session_establishment_request(&self, request: &PfcpMessage, peer_addr: SocketAddr) -> Result<()> {
+        debug!("Handling session establishment request from {}", peer_addr);
+
+        let seid = request.header.seid.unwrap_or(0);
+        if seid == 0 {
+            error!("Session establishment request without SEID");
+            return Ok(());
+        }
+
+        let req = match SessionEstablishmentRequest::parse(request.payload.clone()) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Failed to parse session establishment request: {}", e);
+                let (ipv4, ipv6) = match &self.upf_node_id {
+                    NodeId::Ipv4(addr) => (Some(*addr), None),
+                    NodeId::Ipv6(addr) => (None, Some(*addr)),
+                    NodeId::Fqdn(_) => (None, None),
+                };
+                let resp_seid = FSeid::new(
+                    SEID(0),
+                    ipv4,
+                    ipv6,
+                );
+                let resp = SessionEstablishmentResponse::new(
+                    self.upf_node_id.clone(),
+                    CauseValue::MandatoryIeMissing,
+                    resp_seid,
+                );
+                let response = PfcpMessage::new(
+                    MessageType::SessionEstablishmentResponse,
+                    Some(seid),
+                    request.header.sequence_number,
+                    resp.encode().freeze(),
+                );
+                self.send_message(&response, peer_addr).await?;
+                return Ok(());
+            }
+        };
+
+        info!(
+            "Session establishment request from {:?} (F-SEID: {:?})",
+            req.node_id, req.fseid.seid
+        );
+
+        let ue_ip = req.create_pdrs.first()
+            .and_then(|pdr| pdr.pdi.ue_ip_address.as_ref())
+            .and_then(|ue_ip| ue_ip.ipv4.map(IpAddr::V4).or_else(|| ue_ip.ipv6.map(IpAddr::V6)))
+            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
+
+        let pdrs: Vec<PDR> = req.create_pdrs.iter().map(|create_pdr| {
+            let source_interface = match create_pdr.pdi.source_interface {
+                SourceInterface::Access => PdrSourceInterface::Access,
+                SourceInterface::Core => PdrSourceInterface::Core,
+                _ => PdrSourceInterface::Access,
+            };
+
+            PDR {
+                id: create_pdr.pdr_id.0,
+                precedence: create_pdr.precedence.0,
+                pdi: PDI {
+                    source_interface,
+                    teid: None,
+                    ue_ip_address: create_pdr.pdi.ue_ip_address.as_ref()
+                        .and_then(|ue_ip| ue_ip.ipv4.map(IpAddr::V4).or_else(|| ue_ip.ipv6.map(IpAddr::V6))),
+                },
+                far_id: create_pdr.far_id.as_ref().map(|f| f.0).unwrap_or(crate::types::identifiers::FARID(0)),
+            }
+        }).collect();
+
+        let fars: Vec<FAR> = req.create_fars.iter().map(|create_far| {
+            let action = if create_far.apply_action.drop {
+                ForwardingAction::Drop
+            } else if create_far.apply_action.forward {
+                ForwardingAction::Forward
+            } else if create_far.apply_action.buffer {
+                ForwardingAction::Buffer
+            } else {
+                ForwardingAction::Drop
+            };
+
+            let destination_interface = create_far.destination_interface.as_ref().map(|di| {
+                match di {
+                    DestinationInterface::Access => FarDestinationInterface::Access,
+                    DestinationInterface::Core => FarDestinationInterface::Core,
+                    _ => FarDestinationInterface::Core,
+                }
+            });
+
+            FAR {
+                id: create_far.far_id.0,
+                action,
+                forwarding_parameters: destination_interface.map(|di| {
+                    crate::types::far::ForwardingParameters {
+                        destination_interface: di,
+                        teid: None,
+                        remote_address: None,
+                    }
+                }),
+            }
+        }).collect();
+
+        let session = Session {
+            seid: req.fseid.seid,
+            ue_ip,
+            uplink_teid: TEID(0),
+            ran_address: peer_addr,
+            pdrs,
+            fars,
+            stats: SessionStats::default(),
+            status: SessionStatus::Active,
+        };
+
+        self.session_manager.add_session(session);
+
+        let upf_seid = req.fseid.seid;
+        let (ipv4, ipv6) = match &self.upf_node_id {
+            NodeId::Ipv4(addr) => (Some(*addr), None),
+            NodeId::Ipv6(addr) => (None, Some(*addr)),
+            NodeId::Fqdn(_) => (None, None),
+        };
+        let resp_fseid = FSeid::new(
+            upf_seid,
+            ipv4,
+            ipv6,
+        );
+
+        let resp = SessionEstablishmentResponse::new(
+            self.upf_node_id.clone(),
+            CauseValue::RequestAccepted,
+            resp_fseid,
+        );
+
+        let response = PfcpMessage::new(
+            MessageType::SessionEstablishmentResponse,
+            Some(seid),
+            request.header.sequence_number,
+            resp.encode().freeze(),
+        );
+
+        self.send_message(&response, peer_addr).await?;
+        info!("Session {} established with {}", upf_seid.0, peer_addr);
 
         Ok(())
     }
