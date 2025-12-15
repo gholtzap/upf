@@ -233,6 +233,17 @@
 - Integrated lookup and apply functionality
 - Full test coverage for all actions and edge cases
 
+## 37. Uplink Packet Processing Integration
+- PDR matching integrated into N3 handler for uplink traffic
+- PacketContext creation with source interface (Access) and TEID
+- FAR actions applied for matched packets (Forward/Drop/Buffer)
+- Forward action: packets forwarded to N6 interface with Core destination
+- Drop action: packets dropped and logged
+- Buffer action: logged as not yet implemented, packets dropped
+- No matching PDR: packets dropped and logged with warning
+- Session statistics updated only for successfully forwarded packets
+- Detailed logging of PDR/FAR matching and forwarding decisions
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -265,12 +276,6 @@
 - ARP resolution for next-hop
 
 ## 2. Packet Processing (Simplified)
-
-### 2.1 Uplink Packet Processing Integration
-- Integrate PDR matching into N3 handler
-- Apply FAR actions for uplink traffic
-- Forward matching packets to N6 interface
-- Drop packets when FAR specifies Drop action
 
 ### 2.2 Actual N6 Uplink Forwarding
 - Create TUN/TAP interface or raw socket for N6

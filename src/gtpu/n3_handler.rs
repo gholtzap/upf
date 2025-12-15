@@ -1,7 +1,10 @@
 use super::echo::{create_echo_response, is_echo_request};
 use super::gpdu::{parse_and_process_gpdu, GPduInfo};
 use super::header::{GtpuError, GtpuMessage};
+use crate::far_engine::{FarEngine, ForwardingDecision};
+use crate::packet_classifier::{PacketClassifier, PacketContext};
 use crate::pfcp::session_manager::SessionManager;
+use crate::types::pdr::SourceInterface;
 use crate::types::UplinkPacket;
 use anyhow::Result;
 use bytes::Bytes;
@@ -111,30 +114,82 @@ impl N3Handler {
                     gpdu_info.teid.0, session.ue_ip, session.seid.0
                 );
 
-                self.session_manager.update_session(&session.seid, |s| {
-                    s.stats.uplink_packets += 1;
-                    s.stats.uplink_bytes += gpdu_info.payload.len() as u64;
-                    s.stats.last_activity = std::time::SystemTime::now();
-                });
+                let payload_len = gpdu_info.payload.len();
 
-                info!(
-                    "Processed uplink packet: TEID={}, UE_IP={}, size={} bytes, QFI={:?}",
-                    gpdu_info.teid.0,
-                    session.ue_ip,
-                    gpdu_info.payload.len(),
-                    gpdu_info.qfi
-                );
+                let context = PacketContext {
+                    source_interface: SourceInterface::Access,
+                    teid: Some(gpdu_info.teid),
+                    ue_ip: None,
+                };
 
-                if let Some(sender) = &self.uplink_sender {
-                    let uplink_packet = UplinkPacket {
-                        ue_ip: session.ue_ip,
-                        payload: gpdu_info.payload,
-                    };
+                match PacketClassifier::match_pdr(&context, &session.pdrs) {
+                    Some(match_result) => {
+                        debug!(
+                            "Matched PDR {} with FAR {} (precedence: {})",
+                            match_result.pdr_id.0, match_result.far_id.0, match_result.precedence
+                        );
 
-                    if let Err(e) = sender.send(uplink_packet).await {
-                        error!("Failed to forward uplink packet to N6: {}", e);
-                    } else {
-                        debug!("Forwarded uplink packet to N6 interface");
+                        match FarEngine::lookup_and_apply(match_result.far_id, &session.fars) {
+                            Some(ForwardingDecision::Forward(forwarding_info)) => {
+                                debug!(
+                                    "FAR {} action: Forward to {:?}",
+                                    match_result.far_id.0, forwarding_info.destination_interface
+                                );
+
+                                let payload_len = gpdu_info.payload.len();
+
+                                self.session_manager.update_session(&session.seid, |s| {
+                                    s.stats.uplink_packets += 1;
+                                    s.stats.uplink_bytes += payload_len as u64;
+                                    s.stats.last_activity = std::time::SystemTime::now();
+                                });
+
+                                if let Some(sender) = &self.uplink_sender {
+                                    let uplink_packet = UplinkPacket {
+                                        ue_ip: session.ue_ip,
+                                        payload: gpdu_info.payload,
+                                    };
+
+                                    if let Err(e) = sender.send(uplink_packet).await {
+                                        error!("Failed to forward uplink packet to N6: {}", e);
+                                    } else {
+                                        info!(
+                                            "Forwarded uplink packet: TEID={}, UE_IP={}, size={} bytes, PDR={}, FAR={}, QFI={:?}",
+                                            gpdu_info.teid.0,
+                                            session.ue_ip,
+                                            payload_len,
+                                            match_result.pdr_id.0,
+                                            match_result.far_id.0,
+                                            gpdu_info.qfi
+                                        );
+                                    }
+                                }
+                            }
+                            Some(ForwardingDecision::Drop) => {
+                                info!(
+                                    "FAR {} action: Drop - dropping uplink packet from TEID={}, size={} bytes",
+                                    match_result.far_id.0, gpdu_info.teid.0, payload_len
+                                );
+                            }
+                            Some(ForwardingDecision::Buffer) => {
+                                warn!(
+                                    "FAR {} action: Buffer - buffering not yet implemented, dropping packet from TEID={}, size={} bytes",
+                                    match_result.far_id.0, gpdu_info.teid.0, payload_len
+                                );
+                            }
+                            None => {
+                                warn!(
+                                    "FAR {} not found in session, dropping packet from TEID={}",
+                                    match_result.far_id.0, gpdu_info.teid.0
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        warn!(
+                            "No matching PDR found for uplink packet from TEID={}, dropping packet",
+                            gpdu_info.teid.0
+                        );
                     }
                 }
 
