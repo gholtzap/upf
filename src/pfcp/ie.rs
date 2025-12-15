@@ -39,6 +39,9 @@ pub enum IeType {
     PdrId = 56,
     FSeid = 57,
     NodeId = 60,
+    VolumeMeasurement = 66,
+    DurationMeasurement = 67,
+    UsageReportSdr = 79,
     UeIpAddress = 93,
     RecoveryTimeStamp = 96,
     FarId = 108,
@@ -58,6 +61,9 @@ impl IeType {
             56 => Ok(IeType::PdrId),
             57 => Ok(IeType::FSeid),
             60 => Ok(IeType::NodeId),
+            66 => Ok(IeType::VolumeMeasurement),
+            67 => Ok(IeType::DurationMeasurement),
+            79 => Ok(IeType::UsageReportSdr),
             93 => Ok(IeType::UeIpAddress),
             96 => Ok(IeType::RecoveryTimeStamp),
             108 => Ok(IeType::FarId),
@@ -884,6 +890,231 @@ impl CreateFar {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VolumeMeasurement {
+    pub total_volume: Option<u64>,
+    pub uplink_volume: Option<u64>,
+    pub downlink_volume: Option<u64>,
+}
+
+impl VolumeMeasurement {
+    pub fn new(total_volume: Option<u64>, uplink_volume: Option<u64>, downlink_volume: Option<u64>) -> Self {
+        VolumeMeasurement {
+            total_volume,
+            uplink_volume,
+            downlink_volume,
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+
+        let flags = buf.get_u8();
+        let total = (flags & 0x01) != 0;
+        let uplink = (flags & 0x02) != 0;
+        let downlink = (flags & 0x04) != 0;
+
+        let total_volume = if total {
+            if buf.remaining() < 8 {
+                return Err(IeError::BufferTooShort {
+                    needed: 8,
+                    available: buf.remaining(),
+                });
+            }
+            Some(buf.get_u64())
+        } else {
+            None
+        };
+
+        let uplink_volume = if uplink {
+            if buf.remaining() < 8 {
+                return Err(IeError::BufferTooShort {
+                    needed: 8,
+                    available: buf.remaining(),
+                });
+            }
+            Some(buf.get_u64())
+        } else {
+            None
+        };
+
+        let downlink_volume = if downlink {
+            if buf.remaining() < 8 {
+                return Err(IeError::BufferTooShort {
+                    needed: 8,
+                    available: buf.remaining(),
+                });
+            }
+            Some(buf.get_u64())
+        } else {
+            None
+        };
+
+        Ok(VolumeMeasurement {
+            total_volume,
+            uplink_volume,
+            downlink_volume,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        let mut flags = 0u8;
+        if self.total_volume.is_some() {
+            flags |= 0x01;
+        }
+        if self.uplink_volume.is_some() {
+            flags |= 0x02;
+        }
+        if self.downlink_volume.is_some() {
+            flags |= 0x04;
+        }
+
+        buf.put_u8(flags);
+
+        if let Some(total) = self.total_volume {
+            buf.put_u64(total);
+        }
+
+        if let Some(uplink) = self.uplink_volume {
+            buf.put_u64(uplink);
+        }
+
+        if let Some(downlink) = self.downlink_volume {
+            buf.put_u64(downlink);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 1;
+        if self.total_volume.is_some() {
+            len += 8;
+        }
+        if self.uplink_volume.is_some() {
+            len += 8;
+        }
+        if self.downlink_volume.is_some() {
+            len += 8;
+        }
+        len
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DurationMeasurement(pub u32);
+
+impl DurationMeasurement {
+    pub fn new(duration: u32) -> Self {
+        DurationMeasurement(duration)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(DurationMeasurement(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UsageReportSdr {
+    pub volume_measurement: Option<VolumeMeasurement>,
+    pub duration_measurement: Option<DurationMeasurement>,
+}
+
+impl UsageReportSdr {
+    pub fn new() -> Self {
+        UsageReportSdr {
+            volume_measurement: None,
+            duration_measurement: None,
+        }
+    }
+
+    pub fn with_volume_measurement(mut self, volume_measurement: VolumeMeasurement) -> Self {
+        self.volume_measurement = Some(volume_measurement);
+        self
+    }
+
+    pub fn with_duration_measurement(mut self, duration_measurement: DurationMeasurement) -> Self {
+        self.duration_measurement = Some(duration_measurement);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut volume_measurement = None;
+        let mut duration_measurement = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::VolumeMeasurement => {
+                    volume_measurement = Some(VolumeMeasurement::parse(&mut value_buf)?);
+                }
+                IeType::DurationMeasurement => {
+                    duration_measurement = Some(DurationMeasurement::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(UsageReportSdr {
+            volume_measurement,
+            duration_measurement,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        if let Some(ref volume) = self.volume_measurement {
+            buf.put_u16(IeType::VolumeMeasurement as u16);
+            buf.put_u16(volume.len() as u16);
+            volume.encode(buf);
+        }
+
+        if let Some(ref duration) = self.duration_measurement {
+            buf.put_u16(IeType::DurationMeasurement as u16);
+            buf.put_u16(duration.len() as u16);
+            duration.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 0;
+        if let Some(ref volume) = self.volume_measurement {
+            len += 4 + volume.len();
+        }
+        if let Some(ref duration) = self.duration_measurement {
+            len += 4 + duration.len();
+        }
+        len
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
@@ -900,6 +1131,9 @@ pub enum InformationElement {
     Pdi(Pdi),
     CreatePdr(CreatePdr),
     CreateFar(CreateFar),
+    VolumeMeasurement(VolumeMeasurement),
+    DurationMeasurement(DurationMeasurement),
+    UsageReportSdr(UsageReportSdr),
 }
 
 impl InformationElement {
@@ -952,6 +1186,9 @@ impl InformationElement {
             IeType::Pdi => Ok(InformationElement::Pdi(Pdi::parse(&mut value_buf)?)),
             IeType::CreatePdr => Ok(InformationElement::CreatePdr(CreatePdr::parse(&mut value_buf)?)),
             IeType::CreateFar => Ok(InformationElement::CreateFar(CreateFar::parse(&mut value_buf)?)),
+            IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
+            IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
+            IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
         }
     }
 
@@ -1026,6 +1263,21 @@ impl InformationElement {
                 buf.put_u16(IeType::CreateFar as u16);
                 buf.put_u16(create_far.len() as u16);
                 create_far.encode(buf);
+            }
+            InformationElement::VolumeMeasurement(volume) => {
+                buf.put_u16(IeType::VolumeMeasurement as u16);
+                buf.put_u16(volume.len() as u16);
+                volume.encode(buf);
+            }
+            InformationElement::DurationMeasurement(duration) => {
+                buf.put_u16(IeType::DurationMeasurement as u16);
+                buf.put_u16(duration.len() as u16);
+                duration.encode(buf);
+            }
+            InformationElement::UsageReportSdr(usage_report) => {
+                buf.put_u16(IeType::UsageReportSdr as u16);
+                buf.put_u16(usage_report.len() as u16);
+                usage_report.encode(buf);
             }
         }
     }

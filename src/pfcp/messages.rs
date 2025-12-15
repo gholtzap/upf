@@ -1,5 +1,5 @@
 use bytes::{Bytes, BytesMut, BufMut};
-use super::ie::{InformationElement, NodeId, RecoveryTimeStamp, parse_ies, encode_ies, IeResult, FSeid, CreatePdr, CreateFar};
+use super::ie::{InformationElement, NodeId, RecoveryTimeStamp, parse_ies, encode_ies, IeResult, FSeid, CreatePdr, CreateFar, UsageReportSdr};
 use super::types::CauseValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -304,6 +304,77 @@ impl SessionEstablishmentResponse {
             InformationElement::NodeId(self.node_id.clone()),
             InformationElement::FSeid(self.fseid.clone()),
         ];
+        encode_ies(&ies, &mut buf);
+        buf
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionDeletionRequest {
+}
+
+impl SessionDeletionRequest {
+    pub fn parse(mut buf: Bytes) -> IeResult<Self> {
+        let _ies = parse_ies(&mut buf)?;
+        Ok(SessionDeletionRequest {})
+    }
+
+    pub fn encode(&self) -> BytesMut {
+        let buf = BytesMut::new();
+        buf
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionDeletionResponse {
+    pub cause: CauseValue,
+    pub usage_report: Option<UsageReportSdr>,
+}
+
+impl SessionDeletionResponse {
+    pub fn new(cause: CauseValue) -> Self {
+        SessionDeletionResponse {
+            cause,
+            usage_report: None,
+        }
+    }
+
+    pub fn with_usage_report(mut self, usage_report: UsageReportSdr) -> Self {
+        self.usage_report = Some(usage_report);
+        self
+    }
+
+    pub fn parse(mut buf: Bytes) -> IeResult<Self> {
+        let ies = parse_ies(&mut buf)?;
+
+        let mut usage_report = None;
+
+        for ie in ies {
+            match ie {
+                InformationElement::UsageReportSdr(u) => usage_report = Some(u),
+                _ => {}
+            }
+        }
+
+        Ok(SessionDeletionResponse {
+            cause: CauseValue::RequestAccepted,
+            usage_report,
+        })
+    }
+
+    pub fn encode(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+
+        buf.put_u16(19);
+        buf.put_u16(1);
+        buf.put_u8(u8::from(self.cause));
+
+        let mut ies = vec![];
+
+        if let Some(ref usage_report) = self.usage_report {
+            ies.push(InformationElement::UsageReportSdr(usage_report.clone()));
+        }
+
         encode_ies(&ies, &mut buf);
         buf
     }

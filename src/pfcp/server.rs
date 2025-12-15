@@ -1,9 +1,9 @@
 use super::header::{PfcpMessage, Result};
 use super::types::{MessageType, PFCP_PORT, CauseValue};
-use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest, SessionEstablishmentResponse};
+use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest, SessionEstablishmentResponse, SessionDeletionRequest, SessionDeletionResponse};
 use super::association::{Association, AssociationManager};
 use super::session_manager::SessionManager;
-use super::ie::{NodeId, RecoveryTimeStamp, FSeid, SourceInterface, DestinationInterface};
+use super::ie::{NodeId, RecoveryTimeStamp, FSeid, SourceInterface, DestinationInterface, UsageReportSdr, VolumeMeasurement, DurationMeasurement};
 use crate::types::session::{Session, SessionStats, SessionStatus};
 use crate::types::identifiers::{SEID, TEID};
 use crate::types::pdr::{PDR, PDI, SourceInterface as PdrSourceInterface};
@@ -96,7 +96,7 @@ impl PfcpServer {
                 warn!("Session modification not yet implemented");
             }
             MessageType::SessionDeletionRequest => {
-                warn!("Session deletion not yet implemented");
+                self.handle_session_deletion_request(&message, peer_addr).await?;
             }
             _ => {
                 warn!("Unhandled message type: {:?}", message.header.message_type);
@@ -332,6 +332,90 @@ impl PfcpServer {
 
         self.send_message(&response, peer_addr).await?;
         info!("Session {} established with {}", upf_seid.0, peer_addr);
+
+        Ok(())
+    }
+
+    async fn handle_session_deletion_request(&self, request: &PfcpMessage, peer_addr: SocketAddr) -> Result<()> {
+        debug!("Handling session deletion request from {}", peer_addr);
+
+        let seid = request.header.seid.unwrap_or(0);
+        if seid == 0 {
+            error!("Session deletion request without SEID");
+            return Ok(());
+        }
+
+        let _req = match SessionDeletionRequest::parse(request.payload.clone()) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Failed to parse session deletion request: {}", e);
+                let resp = SessionDeletionResponse::new(CauseValue::MandatoryIeMissing);
+                let response = PfcpMessage::new(
+                    MessageType::SessionDeletionResponse,
+                    Some(seid),
+                    request.header.sequence_number,
+                    resp.encode().freeze(),
+                );
+                self.send_message(&response, peer_addr).await?;
+                return Ok(());
+            }
+        };
+
+        let session = self.session_manager.get_session(&SEID(seid));
+
+        if session.is_none() {
+            warn!("Session {} not found for deletion", seid);
+            let resp = SessionDeletionResponse::new(CauseValue::SessionContextNotFound);
+            let response = PfcpMessage::new(
+                MessageType::SessionDeletionResponse,
+                Some(seid),
+                request.header.sequence_number,
+                resp.encode().freeze(),
+            );
+            self.send_message(&response, peer_addr).await?;
+            return Ok(());
+        }
+
+        let session = session.unwrap();
+
+        let uplink_bytes = session.stats.uplink_bytes;
+        let downlink_bytes = session.stats.downlink_bytes;
+        let total_bytes = uplink_bytes + downlink_bytes;
+
+        let duration = session.stats.last_activity
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as u32;
+
+        let volume_measurement = VolumeMeasurement::new(
+            Some(total_bytes),
+            Some(uplink_bytes),
+            Some(downlink_bytes),
+        );
+
+        let duration_measurement = DurationMeasurement::new(duration);
+
+        let usage_report = UsageReportSdr::new()
+            .with_volume_measurement(volume_measurement)
+            .with_duration_measurement(duration_measurement);
+
+        self.session_manager.remove_session(&SEID(seid));
+
+        info!("Session {} deleted (uplink: {} bytes, downlink: {} bytes)",
+              seid, uplink_bytes, downlink_bytes);
+
+        let resp = SessionDeletionResponse::new(CauseValue::RequestAccepted)
+            .with_usage_report(usage_report);
+
+        let response = PfcpMessage::new(
+            MessageType::SessionDeletionResponse,
+            Some(seid),
+            request.header.sequence_number,
+            resp.encode().freeze(),
+        );
+
+        self.send_message(&response, peer_addr).await?;
+        info!("Session deletion response sent to {}", peer_addr);
 
         Ok(())
     }

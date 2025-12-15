@@ -184,6 +184,24 @@
 - Session statistics updates (downlink packets/bytes)
 - Concurrent operation with N3 and PFCP handlers
 
+## 32. Usage Report Information Elements
+- Volume Measurement IE (total, uplink, downlink volumes)
+- Duration Measurement IE
+- Usage Report SDR (Session Deletion Response) grouped IE
+- IE encoding and decoding with proper flag handling
+- Full test coverage
+
+## 33. PFCP Session Deletion
+- Session Deletion Request message parsing
+- Session Deletion Response message generation
+- Session cleanup and resource release
+- Usage reporting in deletion response
+- Volume statistics (total, uplink, downlink bytes)
+- Duration statistics (session lifetime)
+- Integration with PfcpServer
+- Session context validation
+- Error handling for missing sessions
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -196,12 +214,7 @@
 - Update FAR IE
 - Session state updates
 
-#### 1.1.6 PFCP Session Deletion
-- Session Deletion Request/Response parsing
-- Session cleanup and resource release
-- Usage reporting IEs
-
-#### 1.1.7 Essential Information Elements
+#### 1.1.6 Essential Information Elements
 - PDR (Packet Detection Rule) encoding/decoding
 - FAR (Forwarding Action Rule) encoding/decoding
 - F-SEID (Session Endpoint Identifier)
