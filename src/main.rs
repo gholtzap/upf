@@ -3,6 +3,7 @@ mod types;
 mod pfcp;
 mod gtpu;
 mod packet_classifier;
+mod far_engine;
 
 use anyhow::Result;
 use clap::Parser;

@@ -223,6 +223,16 @@
 - Return matched PDR and associated FAR ID
 - Full test coverage for all matching scenarios
 
+## 36. FAR Application Engine
+- FAR lookup by ID from session's FAR list
+- Apply Forward action (extract forwarding parameters)
+- Apply Drop action (discard packet)
+- Apply Buffer action (queue packet for future implementation)
+- Forwarding decision enumeration (Forward/Drop/Buffer)
+- ForwardingInfo structure with destination interface, TEID, and remote address
+- Integrated lookup and apply functionality
+- Full test coverage for all actions and edge cases
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -256,38 +266,31 @@
 
 ## 2. Packet Processing (Simplified)
 
-### 2.1 FAR Application Engine
-- Create forwarding action module
-- Apply Forward action (route to destination interface)
-- Apply Drop action (discard packet)
-- Apply Buffer action (queue packet temporarily)
-- Look up FAR by ID from matched PDR
-
-### 2.2 Uplink Packet Processing Integration
+### 2.1 Uplink Packet Processing Integration
 - Integrate PDR matching into N3 handler
 - Apply FAR actions for uplink traffic
 - Forward matching packets to N6 interface
 - Drop packets when FAR specifies Drop action
 
-### 2.3 Actual N6 Uplink Forwarding
+### 2.2 Actual N6 Uplink Forwarding
 - Create TUN/TAP interface or raw socket for N6
 - Forward uplink IP packets to internet/data network
 - Remove GTP-U encapsulation (already done)
 - Send packets to destination based on IP routing
 
-### 2.4 N6 Downlink Reception
+### 2.3 N6 Downlink Reception
 - Receive downlink packets from internet/data network on N6
 - Parse IP headers to extract destination UE IP
 - Look up session by UE IP address
 - Forward to N3 interface for GTP-U encapsulation
 
-### 2.5 Downlink Packet Processing Integration
+### 2.4 Downlink Packet Processing Integration
 - Integrate PDR matching into N6 downlink path
 - Apply FAR actions for downlink traffic
 - Add GTP-U encapsulation for packets to UE
 - Send to RAN with correct TEID
 
-### 2.6 Basic QoS
+### 2.5 Basic QoS
 - Simple priority queue (2 levels: high priority, normal)
 - Basic rate limiting per session (token bucket)
 - No fancy scheduling needed initially
