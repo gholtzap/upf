@@ -274,6 +274,15 @@
 - Detailed logging of forwarding operations and errors
 - Cross-platform compatibility with conditional compilation
 
+## 41. GTP-U Error Indication
+- Error Indication message generation
+- Tunnel Endpoint Identifier Data I IE encoding/decoding
+- GTP-U Peer Address IE encoding/decoding (IPv4 and IPv6)
+- Automatic Error Indication transmission for unknown TEIDs
+- Integration with N3 handler
+- Full test coverage for IPv4 and IPv6 peer addresses
+- Message parsing and validation
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -290,11 +299,6 @@
 - Apply Action (Forward/Drop/Buffer)
 
 ### 1.2 GTP-U Protocol Foundation
-#### 1.2.4 GTP-U Error Indication
-- Error Indication message generation
-- Peer address information
-- Tunnel endpoint identifier handling
-
 #### 1.2.5 GTP-U End Marker
 - End Marker message parsing
 - Path switch support

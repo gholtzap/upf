@@ -1,4 +1,5 @@
 use super::echo::{create_echo_response, is_echo_request};
+use super::error_indication::create_error_indication;
 use super::gpdu::{parse_and_process_gpdu, GPduInfo};
 use super::header::{GtpuError, GtpuMessage};
 use crate::far_engine::{FarEngine, ForwardingDecision};
@@ -197,9 +198,19 @@ impl N3Handler {
             }
             None => {
                 warn!(
-                    "No session found for TEID {} from {}",
+                    "No session found for TEID {} from {}, sending Error Indication",
                     gpdu_info.teid.0, peer_addr
                 );
+
+                let error_msg = create_error_indication(gpdu_info.teid, peer_addr.ip());
+                let encoded = error_msg.encode();
+
+                if let Err(e) = self.socket.send_to(&encoded, peer_addr).await {
+                    error!("Failed to send Error Indication to {}: {}", peer_addr, e);
+                } else {
+                    debug!("Sent Error Indication to {} for TEID {}", peer_addr, gpdu_info.teid.0);
+                }
+
                 Ok(())
             }
         }
