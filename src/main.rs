@@ -1,6 +1,7 @@
 mod config;
 mod types;
 mod pfcp;
+mod gtpu;
 
 use anyhow::Result;
 use clap::Parser;

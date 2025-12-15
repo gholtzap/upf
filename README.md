@@ -138,6 +138,14 @@
 - Integration with PfcpServer
 - Full test coverage
 
+## 27. GTP-U Header Structure
+- GTP-U header parsing (version, PT, E, S, PN flags)
+- Message type enumeration (Echo Request/Response, Error Indication, G-PDU, End Marker)
+- TEID extraction and encoding
+- Sequence number handling
+- Extension header support structure
+- Full test coverage
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -164,25 +172,39 @@
 - QFI (QoS Flow Identifier)
 - Apply Action (Forward/Drop/Buffer)
 
-### 1.2 GTP-U (User Plane Tunneling)
+### 1.2 GTP-U Protocol Foundation
+#### 1.2.2 GTP-U Echo Request/Response
+- Echo Request parsing
+- Echo Response generation
+- Health check mechanism
+- Recovery counter handling
 
-**N3 Interface (RAN to UPF):**
-- Receive GTP-U encapsulated packets from base station
-- Remove GTP-U header (decapsulation)
-- Extract TEID (Tunnel Endpoint ID) to identify session
-- Handle QFI (QoS Flow Identifier) in extension headers
+#### 1.2.3 GTP-U G-PDU Handling
+- G-PDU message parsing
+- Payload extraction
+- TEID to session lookup
+- Extension header parsing (QFI)
 
-**N6 Interface (UPF to Data Network/Internet):**
-- Send plain IP packets to internet
-- Receive packets from internet
-- Add GTP-U header (encapsulation)
-- Send back to base station via N3
+#### 1.2.4 GTP-U Error Indication
+- Error Indication message generation
+- Peer address information
+- Tunnel endpoint identifier handling
 
-**Minimal GTP-U Support:**
-- Echo Request/Response (health check)
-- G-PDU (user data packets)
-- End Marker (signals end of data for path switch)
-- Error Indication (report delivery failures)
+#### 1.2.5 GTP-U End Marker
+- End Marker message parsing
+- Path switch support
+
+#### 1.2.6 N3 Interface Handler
+- UDP socket on port 2152
+- Receive GTP-U packets from RAN
+- Decapsulation logic
+- Integration with session store
+
+#### 1.2.7 N6 Interface Handler
+- Raw socket or TAP interface setup
+- Plain IP packet forwarding to internet
+- Encapsulation logic for downlink
+- Integration with session store
 
 ### 1.3 Basic IP Routing
 - IPv4 packet forwarding
