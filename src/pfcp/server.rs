@@ -1,6 +1,6 @@
 use super::header::{PfcpMessage, Result};
 use super::types::{MessageType, PFCP_PORT, CauseValue};
-use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest, SessionEstablishmentResponse, SessionDeletionRequest, SessionDeletionResponse};
+use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest, SessionEstablishmentResponse, SessionModificationRequest, SessionModificationResponse, SessionDeletionRequest, SessionDeletionResponse};
 use super::association::{Association, AssociationManager};
 use super::session_manager::SessionManager;
 use super::ie::{NodeId, RecoveryTimeStamp, FSeid, SourceInterface, DestinationInterface, UsageReportSdr, VolumeMeasurement, DurationMeasurement};
@@ -93,7 +93,7 @@ impl PfcpServer {
                 self.handle_session_establishment_request(&message, peer_addr).await?;
             }
             MessageType::SessionModificationRequest => {
-                warn!("Session modification not yet implemented");
+                self.handle_session_modification_request(&message, peer_addr).await?;
             }
             MessageType::SessionDeletionRequest => {
                 self.handle_session_deletion_request(&message, peer_addr).await?;
@@ -332,6 +332,131 @@ impl PfcpServer {
 
         self.send_message(&response, peer_addr).await?;
         info!("Session {} established with {}", upf_seid.0, peer_addr);
+
+        Ok(())
+    }
+
+    async fn handle_session_modification_request(&self, request: &PfcpMessage, peer_addr: SocketAddr) -> Result<()> {
+        debug!("Handling session modification request from {}", peer_addr);
+
+        let seid = request.header.seid.unwrap_or(0);
+        if seid == 0 {
+            error!("Session modification request without SEID");
+            return Ok(());
+        }
+
+        let req = match SessionModificationRequest::parse(request.payload.clone()) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Failed to parse session modification request: {}", e);
+                let resp = SessionModificationResponse::new(CauseValue::MandatoryIeMissing);
+                let response = PfcpMessage::new(
+                    MessageType::SessionModificationResponse,
+                    Some(seid),
+                    request.header.sequence_number,
+                    resp.encode().freeze(),
+                );
+                self.send_message(&response, peer_addr).await?;
+                return Ok(());
+            }
+        };
+
+        if !self.session_manager.has_session(&SEID(seid)) {
+            warn!("Session {} not found for modification", seid);
+            let resp = SessionModificationResponse::new(CauseValue::SessionContextNotFound);
+            let response = PfcpMessage::new(
+                MessageType::SessionModificationResponse,
+                Some(seid),
+                request.header.sequence_number,
+                resp.encode().freeze(),
+            );
+            self.send_message(&response, peer_addr).await?;
+            return Ok(());
+        }
+
+        info!("Modifying session {} from {}", seid, peer_addr);
+
+        let update_successful = self.session_manager.update_session(&SEID(seid), |session| {
+            for update_pdr in &req.update_pdrs {
+                if let Some(pdr) = session.pdrs.iter_mut().find(|p| p.id == update_pdr.pdr_id.0) {
+                    if let Some(precedence) = &update_pdr.precedence {
+                        pdr.precedence = precedence.0;
+                    }
+                    if let Some(pdi) = &update_pdr.pdi {
+                        let source_interface = match pdi.source_interface {
+                            SourceInterface::Access => PdrSourceInterface::Access,
+                            SourceInterface::Core => PdrSourceInterface::Core,
+                            _ => PdrSourceInterface::Access,
+                        };
+                        pdr.pdi.source_interface = source_interface;
+                        pdr.pdi.ue_ip_address = pdi.ue_ip_address.as_ref()
+                            .and_then(|ue_ip| ue_ip.ipv4.map(IpAddr::V4).or_else(|| ue_ip.ipv6.map(IpAddr::V6)));
+                    }
+                    if let Some(far_id) = &update_pdr.far_id {
+                        pdr.far_id = far_id.0;
+                    }
+                }
+            }
+
+            for update_far in &req.update_fars {
+                if let Some(far) = session.fars.iter_mut().find(|f| f.id == update_far.far_id.0) {
+                    if let Some(apply_action) = &update_far.apply_action {
+                        far.action = if apply_action.drop {
+                            ForwardingAction::Drop
+                        } else if apply_action.forward {
+                            ForwardingAction::Forward
+                        } else if apply_action.buffer {
+                            ForwardingAction::Buffer
+                        } else {
+                            ForwardingAction::Drop
+                        };
+                    }
+                    if let Some(destination_interface) = &update_far.destination_interface {
+                        let dest_interface = match destination_interface {
+                            DestinationInterface::Access => FarDestinationInterface::Access,
+                            DestinationInterface::Core => FarDestinationInterface::Core,
+                            _ => FarDestinationInterface::Core,
+                        };
+                        if let Some(ref mut forwarding_params) = far.forwarding_parameters {
+                            forwarding_params.destination_interface = dest_interface;
+                        } else {
+                            far.forwarding_parameters = Some(crate::types::far::ForwardingParameters {
+                                destination_interface: dest_interface,
+                                teid: None,
+                                remote_address: None,
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+        if !update_successful {
+            error!("Failed to update session {}", seid);
+            let resp = SessionModificationResponse::new(CauseValue::SystemFailure);
+            let response = PfcpMessage::new(
+                MessageType::SessionModificationResponse,
+                Some(seid),
+                request.header.sequence_number,
+                resp.encode().freeze(),
+            );
+            self.send_message(&response, peer_addr).await?;
+            return Ok(());
+        }
+
+        info!("Session {} modified successfully", seid);
+
+        let resp = SessionModificationResponse::new(CauseValue::RequestAccepted);
+
+        let response = PfcpMessage::new(
+            MessageType::SessionModificationResponse,
+            Some(seid),
+            request.header.sequence_number,
+            resp.encode().freeze(),
+        );
+
+        self.send_message(&response, peer_addr).await?;
+        info!("Session modification response sent to {}", peer_addr);
 
         Ok(())
     }

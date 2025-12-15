@@ -31,6 +31,8 @@ pub enum IeType {
     CreatePdr = 1,
     Pdi = 2,
     CreateFar = 3,
+    UpdatePdr = 7,
+    UpdateFar = 10,
     SourceInterface = 20,
     NetworkInstance = 22,
     Precedence = 29,
@@ -53,6 +55,8 @@ impl IeType {
             1 => Ok(IeType::CreatePdr),
             2 => Ok(IeType::Pdi),
             3 => Ok(IeType::CreateFar),
+            7 => Ok(IeType::UpdatePdr),
+            10 => Ok(IeType::UpdateFar),
             20 => Ok(IeType::SourceInterface),
             22 => Ok(IeType::NetworkInstance),
             29 => Ok(IeType::Precedence),
@@ -890,6 +894,221 @@ impl CreateFar {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpdatePdr {
+    pub pdr_id: PdrId,
+    pub precedence: Option<Precedence>,
+    pub pdi: Option<Pdi>,
+    pub far_id: Option<FarId>,
+}
+
+impl UpdatePdr {
+    pub fn new(pdr_id: PdrId) -> Self {
+        UpdatePdr {
+            pdr_id,
+            precedence: None,
+            pdi: None,
+            far_id: None,
+        }
+    }
+
+    pub fn with_precedence(mut self, precedence: Precedence) -> Self {
+        self.precedence = Some(precedence);
+        self
+    }
+
+    pub fn with_pdi(mut self, pdi: Pdi) -> Self {
+        self.pdi = Some(pdi);
+        self
+    }
+
+    pub fn with_far_id(mut self, far_id: FarId) -> Self {
+        self.far_id = Some(far_id);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut pdr_id = None;
+        let mut precedence = None;
+        let mut pdi = None;
+        let mut far_id = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::PdrId => {
+                    pdr_id = Some(PdrId::parse(&mut value_buf)?);
+                }
+                IeType::Precedence => {
+                    precedence = Some(Precedence::parse(&mut value_buf)?);
+                }
+                IeType::Pdi => {
+                    pdi = Some(Pdi::parse(&mut value_buf)?);
+                }
+                IeType::FarId => {
+                    far_id = Some(FarId::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        let pdr_id = pdr_id.ok_or(IeError::InvalidLength(0))?;
+
+        Ok(UpdatePdr {
+            pdr_id,
+            precedence,
+            pdi,
+            far_id,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(IeType::PdrId as u16);
+        buf.put_u16(self.pdr_id.len() as u16);
+        self.pdr_id.encode(buf);
+
+        if let Some(ref precedence) = self.precedence {
+            buf.put_u16(IeType::Precedence as u16);
+            buf.put_u16(precedence.len() as u16);
+            precedence.encode(buf);
+        }
+
+        if let Some(ref pdi) = self.pdi {
+            buf.put_u16(IeType::Pdi as u16);
+            buf.put_u16(pdi.len() as u16);
+            pdi.encode(buf);
+        }
+
+        if let Some(ref far_id) = self.far_id {
+            buf.put_u16(IeType::FarId as u16);
+            buf.put_u16(far_id.len() as u16);
+            far_id.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 4 + self.pdr_id.len();
+        if let Some(ref precedence) = self.precedence {
+            len += 4 + precedence.len();
+        }
+        if let Some(ref pdi) = self.pdi {
+            len += 4 + pdi.len();
+        }
+        if let Some(ref far_id) = self.far_id {
+            len += 4 + far_id.len();
+        }
+        len
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpdateFar {
+    pub far_id: FarId,
+    pub apply_action: Option<ApplyAction>,
+    pub destination_interface: Option<DestinationInterface>,
+}
+
+impl UpdateFar {
+    pub fn new(far_id: FarId) -> Self {
+        UpdateFar {
+            far_id,
+            apply_action: None,
+            destination_interface: None,
+        }
+    }
+
+    pub fn with_apply_action(mut self, apply_action: ApplyAction) -> Self {
+        self.apply_action = Some(apply_action);
+        self
+    }
+
+    pub fn with_destination_interface(mut self, destination_interface: DestinationInterface) -> Self {
+        self.destination_interface = Some(destination_interface);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut far_id = None;
+        let mut apply_action = None;
+        let mut destination_interface = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::FarId => {
+                    far_id = Some(FarId::parse(&mut value_buf)?);
+                }
+                IeType::ApplyAction => {
+                    apply_action = Some(ApplyAction::parse(&mut value_buf)?);
+                }
+                IeType::DestinationInterface => {
+                    destination_interface = Some(DestinationInterface::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        let far_id = far_id.ok_or(IeError::InvalidLength(0))?;
+
+        Ok(UpdateFar {
+            far_id,
+            apply_action,
+            destination_interface,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(IeType::FarId as u16);
+        buf.put_u16(self.far_id.len() as u16);
+        self.far_id.encode(buf);
+
+        if let Some(ref apply_action) = self.apply_action {
+            buf.put_u16(IeType::ApplyAction as u16);
+            buf.put_u16(apply_action.len() as u16);
+            apply_action.encode(buf);
+        }
+
+        if let Some(ref destination_interface) = self.destination_interface {
+            buf.put_u16(IeType::DestinationInterface as u16);
+            buf.put_u16(destination_interface.len() as u16);
+            destination_interface.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 4 + self.far_id.len();
+        if let Some(ref apply_action) = self.apply_action {
+            len += 4 + apply_action.len();
+        }
+        if let Some(ref destination_interface) = self.destination_interface {
+            len += 4 + destination_interface.len();
+        }
+        len
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VolumeMeasurement {
     pub total_volume: Option<u64>,
@@ -1131,6 +1350,8 @@ pub enum InformationElement {
     Pdi(Pdi),
     CreatePdr(CreatePdr),
     CreateFar(CreateFar),
+    UpdatePdr(UpdatePdr),
+    UpdateFar(UpdateFar),
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
@@ -1186,6 +1407,8 @@ impl InformationElement {
             IeType::Pdi => Ok(InformationElement::Pdi(Pdi::parse(&mut value_buf)?)),
             IeType::CreatePdr => Ok(InformationElement::CreatePdr(CreatePdr::parse(&mut value_buf)?)),
             IeType::CreateFar => Ok(InformationElement::CreateFar(CreateFar::parse(&mut value_buf)?)),
+            IeType::UpdatePdr => Ok(InformationElement::UpdatePdr(UpdatePdr::parse(&mut value_buf)?)),
+            IeType::UpdateFar => Ok(InformationElement::UpdateFar(UpdateFar::parse(&mut value_buf)?)),
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
@@ -1263,6 +1486,16 @@ impl InformationElement {
                 buf.put_u16(IeType::CreateFar as u16);
                 buf.put_u16(create_far.len() as u16);
                 create_far.encode(buf);
+            }
+            InformationElement::UpdatePdr(update_pdr) => {
+                buf.put_u16(IeType::UpdatePdr as u16);
+                buf.put_u16(update_pdr.len() as u16);
+                update_pdr.encode(buf);
+            }
+            InformationElement::UpdateFar(update_far) => {
+                buf.put_u16(IeType::UpdateFar as u16);
+                buf.put_u16(update_far.len() as u16);
+                update_far.encode(buf);
             }
             InformationElement::VolumeMeasurement(volume) => {
                 buf.put_u16(IeType::VolumeMeasurement as u16);

@@ -202,17 +202,23 @@
 - Session context validation
 - Error handling for missing sessions
 
+## 34. PFCP Session Modification
+- Session Modification Request message parsing
+- Session Modification Response message generation
+- Update PDR Information Element
+- Update FAR Information Element
+- Session state updates for existing PDRs
+- Session state updates for existing FARs
+- Dynamic rule modification support
+- Integration with PfcpServer
+- Session context validation
+- Error handling for missing sessions
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
 ### 1.1 PFCP (N4 Interface - UPF to SMF)
 **Purpose:** Control plane communication with SMF
-
-#### 1.1.5 PFCP Session Modification
-- Session Modification Request/Response parsing
-- Update PDR IE
-- Update FAR IE
-- Session state updates
 
 #### 1.1.6 Essential Information Elements
 - PDR (Packet Detection Rule) encoding/decoding

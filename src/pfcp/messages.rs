@@ -1,5 +1,5 @@
 use bytes::{Bytes, BytesMut, BufMut};
-use super::ie::{InformationElement, NodeId, RecoveryTimeStamp, parse_ies, encode_ies, IeResult, FSeid, CreatePdr, CreateFar, UsageReportSdr};
+use super::ie::{InformationElement, NodeId, RecoveryTimeStamp, parse_ies, encode_ies, IeResult, FSeid, CreatePdr, CreateFar, UpdatePdr, UpdateFar, UsageReportSdr};
 use super::types::CauseValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -305,6 +305,80 @@ impl SessionEstablishmentResponse {
             InformationElement::FSeid(self.fseid.clone()),
         ];
         encode_ies(&ies, &mut buf);
+        buf
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionModificationRequest {
+    pub update_pdrs: Vec<UpdatePdr>,
+    pub update_fars: Vec<UpdateFar>,
+}
+
+impl SessionModificationRequest {
+    pub fn parse(mut buf: Bytes) -> IeResult<Self> {
+        let ies = parse_ies(&mut buf)?;
+
+        let mut update_pdrs = Vec::new();
+        let mut update_fars = Vec::new();
+
+        for ie in ies {
+            match ie {
+                InformationElement::UpdatePdr(pdr) => update_pdrs.push(pdr),
+                InformationElement::UpdateFar(far) => update_fars.push(far),
+                _ => {}
+            }
+        }
+
+        Ok(SessionModificationRequest {
+            update_pdrs,
+            update_fars,
+        })
+    }
+
+    pub fn encode(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+        let mut ies = vec![];
+
+        for pdr in &self.update_pdrs {
+            ies.push(InformationElement::UpdatePdr(pdr.clone()));
+        }
+
+        for far in &self.update_fars {
+            ies.push(InformationElement::UpdateFar(far.clone()));
+        }
+
+        encode_ies(&ies, &mut buf);
+        buf
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionModificationResponse {
+    pub cause: CauseValue,
+}
+
+impl SessionModificationResponse {
+    pub fn new(cause: CauseValue) -> Self {
+        SessionModificationResponse {
+            cause,
+        }
+    }
+
+    pub fn parse(mut buf: Bytes) -> IeResult<Self> {
+        let _ies = parse_ies(&mut buf)?;
+        Ok(SessionModificationResponse {
+            cause: CauseValue::RequestAccepted,
+        })
+    }
+
+    pub fn encode(&self) -> BytesMut {
+        let mut buf = BytesMut::new();
+
+        buf.put_u16(19);
+        buf.put_u16(1);
+        buf.put_u8(u8::from(self.cause));
+
         buf
     }
 }
