@@ -7,6 +7,7 @@ use anyhow::Result;
 use clap::Parser;
 use log::{info, error};
 use pfcp::PfcpServer;
+use gtpu::N3Handler;
 
 #[derive(Parser, Debug)]
 #[command(name = "upf")]
@@ -33,9 +34,31 @@ async fn main() -> Result<()> {
     info!("UPF Node ID: {}", config.upf_node_id);
 
     let pfcp_server = PfcpServer::new(config.n4_address.to_string(), config.upf_node_id.clone()).await?;
+    let session_manager = pfcp_server.session_manager();
+
+    let n3_handler = N3Handler::new(config.n3_address, session_manager).await?;
     info!("UPF initialized successfully");
 
-    pfcp_server.run().await?;
+    let pfcp_task = tokio::spawn(async move {
+        if let Err(e) = pfcp_server.run().await {
+            error!("PFCP server error: {}", e);
+        }
+    });
+
+    let n3_task = tokio::spawn(async move {
+        if let Err(e) = n3_handler.run().await {
+            error!("N3 handler error: {}", e);
+        }
+    });
+
+    tokio::select! {
+        _ = pfcp_task => {
+            error!("PFCP server terminated");
+        }
+        _ = n3_task => {
+            error!("N3 handler terminated");
+        }
+    }
 
     Ok(())
 }

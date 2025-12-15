@@ -34,6 +34,36 @@ impl Default for RecoveryCounter {
     }
 }
 
+static RECOVERY_COUNTER: AtomicU8 = AtomicU8::new(0);
+
+pub fn is_echo_request(msg: &GtpuMessage) -> bool {
+    msg.header.message_type == MessageType::EchoRequest
+}
+
+pub fn create_echo_response(request: &GtpuMessage) -> GtpuMessage {
+    let mut response_payload = BytesMut::new();
+    let recovery = RECOVERY_COUNTER.load(Ordering::SeqCst);
+    response_payload.extend_from_slice(&[recovery]);
+
+    let mut response_header = GtpuHeader::new(MessageType::EchoResponse, 0);
+
+    if let Some(seq) = request.header.sequence_number {
+        response_header = response_header.with_sequence_number(seq);
+    }
+
+    response_header.length = if response_header.has_optional_fields() {
+        4 + response_payload.len() as u16
+    } else {
+        response_payload.len() as u16
+    };
+
+    GtpuMessage {
+        header: response_header,
+        extension_headers: Vec::new(),
+        payload: response_payload.freeze(),
+    }
+}
+
 pub struct EchoHandler {
     recovery_counter: Arc<RecoveryCounter>,
 }

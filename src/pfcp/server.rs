@@ -348,4 +348,8 @@ impl PfcpServer {
         *seq = seq.wrapping_add(1);
         current
     }
+
+    pub fn session_manager(&self) -> SessionManager {
+        self.session_manager.clone()
+    }
 }

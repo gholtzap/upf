@@ -163,6 +163,15 @@
 - SessionManager TEID-based lookup
 - Full test coverage
 
+## 30. N3 Interface Handler
+- UDP socket on port 2152
+- Receive GTP-U packets from RAN
+- GTP-U Echo Request/Response handling
+- G-PDU decapsulation logic
+- Integration with session store for TEID lookup
+- Session statistics updates (uplink packets/bytes)
+- Concurrent operation with PFCP server
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -199,13 +208,7 @@
 - End Marker message parsing
 - Path switch support
 
-#### 1.2.6 N3 Interface Handler
-- UDP socket on port 2152
-- Receive GTP-U packets from RAN
-- Decapsulation logic
-- Integration with session store
-
-#### 1.2.7 N6 Interface Handler
+#### 1.2.6 N6 Interface Handler
 - Raw socket or TAP interface setup
 - Plain IP packet forwarding to internet
 - Encapsulation logic for downlink
