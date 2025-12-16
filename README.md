@@ -346,6 +346,19 @@
 - Direct delivery support when no route is found
 - Full test coverage for routing and ARP functionality
 
+## 48. PFCP Request Retry Mechanism
+- PendingRequest type for tracking outgoing requests with timeout and retry metadata
+- RequestTracker for managing pending requests with sequence number mapping
+- Automatic retry with exponential backoff (3 second base timeout, 2x multiplier)
+- Maximum retry limit of 3 attempts before giving up
+- Request timeout detection with configurable timeout per request
+- Response matching to remove pending requests on successful response
+- UPF-initiated heartbeat requests to SMF every 30 seconds
+- Association health monitoring with status updates based on heartbeat responses
+- Timeout checker task running every second to detect and retry timed-out requests
+- Association marked as inactive after max retries exceeded
+- Full test coverage for retry logic, timeout handling, and request tracking
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -439,17 +452,17 @@
 ## 6. Error Handling
 
 ### 6.1 Basic Error Handling
-- Log errors to console/file
-- Send GTP-U Error Indication if can't deliver packet
-- Send PFCP error responses for invalid requests
-- Don't crash on malformed packets
-- Simple retry for PFCP messages
+- Log errors to console/file (IMPLEMENTED - section 8)
+- Send GTP-U Error Indication if can't deliver packet (IMPLEMENTED - section 41)
+- Send PFCP error responses for invalid requests (IMPLEMENTED - sections 26, 33, 34)
+- Don't crash on malformed packets (IMPLEMENTED - error handling in message parsing)
+- Simple retry for PFCP messages (IMPLEMENTED - section 48)
 
 ### 6.2 Failure Scenarios
-- Unknown TEID: Drop packet, send Error Indication
-- No matching PDR: Drop packet
-- Session not found: Send PFCP error response
-- Interface down: Log error, drop packets
+- Unknown TEID: Drop packet, send Error Indication (IMPLEMENTED - section 41)
+- No matching PDR: Drop packet (IMPLEMENTED - sections 37, 39)
+- Session not found: Send PFCP error response (IMPLEMENTED - sections 33, 34)
+- Interface down: Log error, drop packets (IMPLEMENTED - error handling in N3/N6 handlers)
 
 ## 18. Critical 3GPP Specs to Read
 

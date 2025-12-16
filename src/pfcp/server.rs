@@ -1,9 +1,10 @@
 use super::header::{PfcpMessage, Result};
 use super::types::{MessageType, PFCP_PORT, CauseValue};
 use super::messages::{AssociationSetupRequest, AssociationSetupResponse, HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest, SessionEstablishmentResponse, SessionModificationRequest, SessionModificationResponse, SessionDeletionRequest, SessionDeletionResponse};
-use super::association::{Association, AssociationManager};
+use super::association::{Association, AssociationManager, AssociationStatus};
 use super::session_manager::SessionManager;
 use super::ie::{NodeId, RecoveryTimeStamp, FSeid, SourceInterface, DestinationInterface, UsageReportSdr, VolumeMeasurement, DurationMeasurement};
+use super::retry::{RequestTracker, PendingRequest};
 use crate::types::session::{Session, SessionStats, SessionStatus};
 use crate::types::identifiers::{QFI, SEID, TEID};
 use crate::types::pdr::{PDR, PDI, SourceInterface as PdrSourceInterface};
@@ -14,9 +15,13 @@ use std::net::{SocketAddr, IpAddr};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
+use tokio::time::{interval, Duration};
 
 const MAX_PACKET_SIZE: usize = 65535;
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const TIMEOUT_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
+#[derive(Clone)]
 pub struct PfcpServer {
     socket: Arc<UdpSocket>,
     sequence_number: Arc<Mutex<u32>>,
@@ -24,6 +29,7 @@ pub struct PfcpServer {
     session_manager: SessionManager,
     upf_node_id: NodeId,
     recovery_time_stamp: RecoveryTimeStamp,
+    request_tracker: RequestTracker,
 }
 
 impl PfcpServer {
@@ -55,10 +61,23 @@ impl PfcpServer {
             session_manager,
             upf_node_id: node_id,
             recovery_time_stamp: RecoveryTimeStamp::now(),
+            request_tracker: RequestTracker::new(),
         })
     }
 
     pub async fn run(&self) -> Result<()> {
+        let server = Arc::new(self.clone());
+
+        let heartbeat_server = server.clone();
+        tokio::spawn(async move {
+            heartbeat_server.heartbeat_task().await;
+        });
+
+        let timeout_server = server.clone();
+        tokio::spawn(async move {
+            timeout_server.timeout_check_task().await;
+        });
+
         let mut buf = vec![0u8; MAX_PACKET_SIZE];
 
         loop {
@@ -78,6 +97,69 @@ impl PfcpServer {
         }
     }
 
+    async fn heartbeat_task(&self) {
+        let mut interval = interval(HEARTBEAT_INTERVAL);
+        loop {
+            interval.tick().await;
+            if let Err(e) = self.send_heartbeats().await {
+                error!("Error sending heartbeats: {}", e);
+            }
+        }
+    }
+
+    async fn timeout_check_task(&self) {
+        let mut interval = interval(TIMEOUT_CHECK_INTERVAL);
+        loop {
+            interval.tick().await;
+            let timed_out = self.request_tracker.check_timeouts().await;
+            for (seq_num, request) in timed_out {
+                if let Err(e) = self.retry_request(seq_num, request).await {
+                    error!("Error retrying request {}: {}", seq_num, e);
+                }
+            }
+        }
+    }
+
+    async fn send_heartbeats(&self) -> Result<()> {
+        let associations = self.association_manager.get_all_active_associations();
+
+        for assoc in associations {
+            debug!("Sending heartbeat to {:?}", assoc.remote_address);
+
+            let seq_num = self.next_sequence_number().await;
+
+            let request = HeartbeatRequest::new(self.recovery_time_stamp);
+            let message = PfcpMessage::new(
+                MessageType::HeartbeatRequest,
+                None,
+                seq_num,
+                request.encode().freeze(),
+            );
+
+            let pending_request = PendingRequest::new(message.clone(), assoc.remote_address);
+            self.request_tracker.add_request(seq_num, pending_request).await;
+
+            if let Err(e) = self.send_message(&message, assoc.remote_address).await {
+                error!("Failed to send heartbeat to {}: {}", assoc.remote_address, e);
+                self.request_tracker.remove_request(seq_num).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn retry_request(&self, seq_num: u32, request: PendingRequest) -> Result<()> {
+        debug!("Retrying request {} to {}", seq_num, request.peer_addr);
+
+        if let Err(e) = self.send_message(&request.message, request.peer_addr).await {
+            error!("Failed to retry request {}: {}", seq_num, e);
+            self.request_tracker.remove_request(seq_num).await;
+            self.association_manager.update_status(&request.peer_addr, AssociationStatus::Inactive);
+        }
+
+        Ok(())
+    }
+
     async fn handle_message(&self, data: Bytes, peer_addr: SocketAddr) -> Result<()> {
         let message = PfcpMessage::parse(data)?;
 
@@ -85,6 +167,15 @@ impl PfcpServer {
             "Received PFCP message: type={:?}, seq={}, from={}",
             message.header.message_type, message.header.sequence_number, peer_addr
         );
+
+        if self.is_response_message(&message.header.message_type) {
+            if self.request_tracker.handle_response(&message).await? {
+                self.handle_response_message(&message, peer_addr).await?;
+            } else {
+                debug!("Received response for unknown request: seq={}", message.header.sequence_number);
+            }
+            return Ok(());
+        }
 
         match message.header.message_type {
             MessageType::HeartbeatRequest => {
@@ -107,6 +198,30 @@ impl PfcpServer {
             }
         }
 
+        Ok(())
+    }
+
+    fn is_response_message(&self, msg_type: &MessageType) -> bool {
+        matches!(
+            msg_type,
+            MessageType::HeartbeatResponse
+                | MessageType::AssociationSetupResponse
+                | MessageType::SessionEstablishmentResponse
+                | MessageType::SessionModificationResponse
+                | MessageType::SessionDeletionResponse
+        )
+    }
+
+    async fn handle_response_message(&self, message: &PfcpMessage, peer_addr: SocketAddr) -> Result<()> {
+        match message.header.message_type {
+            MessageType::HeartbeatResponse => {
+                debug!("Received heartbeat response from {}", peer_addr);
+                self.association_manager.update_status(&peer_addr, AssociationStatus::Active);
+            }
+            _ => {
+                debug!("Received response: {:?}", message.header.message_type);
+            }
+        }
         Ok(())
     }
 

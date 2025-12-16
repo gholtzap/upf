@@ -8,6 +8,12 @@ pub struct HeartbeatRequest {
 }
 
 impl HeartbeatRequest {
+    pub fn new(recovery_time_stamp: RecoveryTimeStamp) -> Self {
+        HeartbeatRequest {
+            recovery_time_stamp,
+        }
+    }
+
     pub fn parse(mut buf: Bytes) -> IeResult<Self> {
         let ies = parse_ies(&mut buf)?;
 

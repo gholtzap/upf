@@ -70,6 +70,15 @@ impl AssociationManager {
             assoc.status = status;
         }
     }
+
+    pub fn get_all_active_associations(&self) -> Vec<Association> {
+        let associations = self.associations.lock().unwrap();
+        associations
+            .values()
+            .filter(|a| a.status == AssociationStatus::Active)
+            .cloned()
+            .collect()
+    }
 }
 
 impl Default for AssociationManager {
