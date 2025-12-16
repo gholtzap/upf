@@ -1,6 +1,7 @@
 use crate::types::far::FAR;
 use crate::types::identifiers::{SEID, TEID};
 use crate::types::pdr::PDR;
+use crate::types::token_bucket::TokenBucket;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::time::SystemTime;
@@ -42,4 +43,8 @@ pub struct Session {
     pub fars: Vec<FAR>,
     pub stats: SessionStats,
     pub status: SessionStatus,
+    #[serde(skip)]
+    pub uplink_token_bucket: Option<TokenBucket>,
+    #[serde(skip)]
+    pub downlink_token_bucket: Option<TokenBucket>,
 }

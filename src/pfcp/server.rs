@@ -305,6 +305,8 @@ impl PfcpServer {
             fars,
             stats: SessionStats::default(),
             status: SessionStatus::Active,
+            uplink_token_bucket: None,
+            downlink_token_bucket: None,
         };
 
         self.session_manager.add_session(session);

@@ -108,6 +108,8 @@ mod tests {
             fars: Vec::new(),
             stats: SessionStats::default(),
             status: SessionStatus::Active,
+            uplink_token_bucket: None,
+            downlink_token_bucket: None,
         };
 
         manager.add_session(session.clone());
@@ -137,6 +139,8 @@ mod tests {
             fars: Vec::new(),
             stats: SessionStats::default(),
             status: SessionStatus::Active,
+            uplink_token_bucket: None,
+            downlink_token_bucket: None,
         };
 
         manager.add_session(session);

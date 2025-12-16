@@ -312,6 +312,15 @@
 - Clear operation for queue reset
 - Full test coverage for all queue operations
 
+## 45. Token Bucket Rate Limiting
+- Per-session token bucket implementation
+- Configurable rate and burst size
+- Token bucket state tracking (uplink and downlink)
+- Automatic token refill based on configured rate
+- Token consumption for rate limiting enforcement
+- Integration with Session structure
+- Full test coverage for all token bucket operations
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -338,12 +347,6 @@
 ## 2. Packet Processing (Simplified)
 
 ### 2.5 Basic QoS
-
-#### 2.5.3 Token Bucket Rate Limiting
-- Per-session token bucket implementation
-- Configurable rate and burst size
-- Token bucket state tracking
-- Rate limiting enforcement on packet forwarding
 
 #### 2.5.4 QoS-Aware Packet Forwarding
 - QFI extraction from GTP-U extension headers
