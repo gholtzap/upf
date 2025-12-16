@@ -8,7 +8,7 @@ mod far_engine;
 use anyhow::Result;
 use clap::Parser;
 use log::{info, error};
-use pfcp::PfcpServer;
+use pfcp::{PfcpServer, SessionManager};
 use gtpu::{N3Handler, N6Handler};
 use tokio::sync::mpsc;
 
@@ -37,8 +37,15 @@ async fn main() -> Result<()> {
     info!("N6 interface: {}", config.n6_interface);
     info!("UPF Node ID: {}", config.upf_node_id);
 
-    let pfcp_server = PfcpServer::new(config.n4_address.to_string(), config.upf_node_id.clone()).await?;
-    let session_manager = pfcp_server.session_manager();
+    let qos_manager = config.create_qos_manager();
+    info!("QoS profile manager initialized");
+
+    let session_manager = SessionManager::new_with_qos(qos_manager);
+    let pfcp_server = PfcpServer::new_with_session_manager(
+        config.n4_address.to_string(),
+        config.upf_node_id.clone(),
+        session_manager.clone()
+    ).await?;
 
     let (uplink_tx, uplink_rx) = mpsc::channel(1000);
 

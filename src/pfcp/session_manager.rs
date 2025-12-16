@@ -1,17 +1,27 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use crate::types::session::Session;
-use crate::types::identifiers::{SEID, TEID};
+use crate::types::identifiers::{SEID, TEID, QFI};
+use crate::types::qos::{QosProfileManager, QosProfile, PriorityLevel};
 
 #[derive(Debug, Clone)]
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<u64, Session>>>,
+    qos_manager: Arc<QosProfileManager>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         SessionManager {
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            qos_manager: Arc::new(QosProfileManager::default()),
+        }
+    }
+
+    pub fn new_with_qos(qos_manager: QosProfileManager) -> Self {
+        SessionManager {
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+            qos_manager: Arc::new(qos_manager),
         }
     }
 
@@ -61,6 +71,14 @@ impl SessionManager {
     pub fn session_count(&self) -> usize {
         let sessions = self.sessions.lock().unwrap();
         sessions.len()
+    }
+
+    pub fn get_qos_profile(&self, qfi: QFI) -> &QosProfile {
+        self.qos_manager.get_profile(qfi)
+    }
+
+    pub fn get_priority(&self, qfi: QFI) -> PriorityLevel {
+        self.qos_manager.get_priority(qfi)
     }
 }
 

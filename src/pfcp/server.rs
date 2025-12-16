@@ -28,6 +28,10 @@ pub struct PfcpServer {
 
 impl PfcpServer {
     pub async fn new(bind_addr: String, upf_node_id: String) -> Result<Self> {
+        Self::new_with_session_manager(bind_addr, upf_node_id, SessionManager::new()).await
+    }
+
+    pub async fn new_with_session_manager(bind_addr: String, upf_node_id: String, session_manager: SessionManager) -> Result<Self> {
         let full_addr = if bind_addr.contains(':') {
             bind_addr
         } else {
@@ -48,7 +52,7 @@ impl PfcpServer {
             socket: Arc::new(socket),
             sequence_number: Arc::new(Mutex::new(1)),
             association_manager: AssociationManager::new(),
-            session_manager: SessionManager::new(),
+            session_manager,
             upf_node_id: node_id,
             recovery_time_stamp: RecoveryTimeStamp::now(),
         })

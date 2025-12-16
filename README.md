@@ -292,6 +292,15 @@
 - End Marker reception logging and processing
 - Full test coverage for End Marker functionality
 
+## 43. QoS Profile Management
+- QFI to priority level mapping (High, Normal)
+- QoS profile structure with bitrate limits (max and guaranteed for uplink/downlink)
+- Default QoS profiles for standard QFI values (1, 5, 9)
+- QosProfileManager for centralized QoS profile lookup
+- YAML configuration support for custom QoS profiles
+- Integration with SessionManager for QoS-aware operations
+- Full test coverage for QoS profile management
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -318,9 +327,25 @@
 ## 2. Packet Processing (Simplified)
 
 ### 2.5 Basic QoS
-- Simple priority queue (2 levels: high priority, normal)
-- Basic rate limiting per session (token bucket)
-- No fancy scheduling needed initially
+
+#### 2.5.2 Priority Queue Implementation
+- Two-level priority queue (high priority, normal)
+- Queue data structures for packet buffering
+- Priority-based dequeue logic
+- Queue size limits and overflow handling
+
+#### 2.5.3 Token Bucket Rate Limiting
+- Per-session token bucket implementation
+- Configurable rate and burst size
+- Token bucket state tracking
+- Rate limiting enforcement on packet forwarding
+
+#### 2.5.4 QoS-Aware Packet Forwarding
+- QFI extraction from GTP-U extension headers
+- QFI-based QoS profile lookup
+- Priority queue enqueue/dequeue in forwarding path
+- Token bucket check before forwarding
+- Integration with N6 packet forwarding
 
 ## 3. Session Management
 
