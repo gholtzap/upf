@@ -333,6 +333,19 @@
 - Rate limit enforcement with packet dropping on token exhaustion
 - Integration with N3 and N6 packet forwarding handlers
 
+## 47. Routing Table and ARP Cache
+- Routing table data structure with route management
+- IP network representation for IPv4 and IPv6 with CIDR notation
+- Longest prefix match algorithm for route lookup
+- Metric-based route preference for equal-length prefixes
+- Next-hop resolution for packet forwarding
+- ARP cache for MAC address resolution
+- YAML configuration support for static routes and ARP entries
+- Integration with N6 packet forwarding for uplink traffic
+- Route-aware packet forwarding for IPv4 and IPv6
+- Direct delivery support when no route is found
+- Full test coverage for routing and ARP functionality
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -349,12 +362,6 @@
 - Apply Action (Forward/Drop/Buffer)
 
 ### 1.2 GTP-U Protocol Foundation
-
-### 1.3 Basic IP Routing
-- IPv4 packet forwarding
-- IPv6 packet forwarding
-- Simple routing table lookup
-- ARP resolution for next-hop
 
 ## 2. Packet Processing (Simplified)
 

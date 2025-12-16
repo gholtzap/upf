@@ -7,6 +7,7 @@ pub mod downlink_packet;
 pub mod qos;
 pub mod priority_queue;
 pub mod token_bucket;
+pub mod routing;
 
 pub use identifiers::{SEID, TEID, PDRID, FARID, QFI};
 pub use pdr::{PDR, PDI, PacketDirection, SourceInterface};
@@ -17,3 +18,4 @@ pub use downlink_packet::DownlinkPacket;
 pub use qos::{QosProfile, QosProfileManager, PriorityLevel};
 pub use priority_queue::{PriorityQueue, QueuedPacket, QueueError};
 pub use token_bucket::{TokenBucket, TokenBucketConfig};
+pub use routing::{Route, RoutingTable, IpNetwork, ArpCache, ArpEntry};

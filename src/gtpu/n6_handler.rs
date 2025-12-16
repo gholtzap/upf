@@ -6,6 +6,7 @@ use crate::pfcp::session_manager::SessionManager;
 use crate::types::pdr::SourceInterface;
 use crate::types::priority_queue::PriorityQueue;
 use crate::types::qos::QosProfileManager;
+use crate::types::routing::{RoutingTable, ArpCache};
 use crate::types::UplinkPacket;
 use anyhow::Result;
 use bytes::Bytes;
@@ -26,6 +27,8 @@ pub struct N6Handler {
     raw_socket_v6: Option<Socket>,
     qos_manager: Arc<QosProfileManager>,
     downlink_queue: Arc<PriorityQueue>,
+    routing_table: RoutingTable,
+    arp_cache: ArpCache,
 }
 
 impl N6Handler {
@@ -37,6 +40,8 @@ impl N6Handler {
         interface_name: String,
         qos_manager: Arc<QosProfileManager>,
         downlink_queue: Arc<PriorityQueue>,
+        routing_table: RoutingTable,
+        arp_cache: ArpCache,
     ) -> Result<Self> {
         let downlink_socket = UdpSocket::bind(n6_address).await?;
         info!("N6 interface bound to {} for downlink reception", n6_address);
@@ -67,6 +72,9 @@ impl N6Handler {
         };
 
         info!("N6 interface handler created for interface: {}", interface_name);
+        info!("Routing table initialized with {} routes", routing_table.get_all_routes().len());
+        info!("ARP cache initialized with {} entries", arp_cache.get_all_entries().len());
+
         Ok(Self {
             session_manager,
             uplink_receiver,
@@ -77,6 +85,8 @@ impl N6Handler {
             raw_socket_v6,
             qos_manager,
             downlink_queue,
+            routing_table,
+            arp_cache,
         })
     }
 
@@ -316,9 +326,45 @@ impl N6Handler {
 
     fn forward_packet_v4(&self, socket: &Socket, payload: &[u8], dest_ip: IpAddr) -> Result<()> {
         if let IpAddr::V4(ipv4) = dest_ip {
-            let dest_addr = SocketAddr::new(IpAddr::V4(ipv4), 0);
-            socket.send_to(payload, &dest_addr.into())?;
-            debug!("Sent {} bytes to {} via raw IPv4 socket", payload.len(), ipv4);
+            let next_hop = match self.routing_table.lookup(&dest_ip) {
+                Some(route) => {
+                    debug!(
+                        "Route found for {}: via {:?} on interface {}",
+                        dest_ip, route.next_hop, route.interface
+                    );
+                    route.next_hop.unwrap_or(dest_ip)
+                }
+                None => {
+                    debug!("No route found for {}, using direct delivery", dest_ip);
+                    dest_ip
+                }
+            };
+
+            if let IpAddr::V4(next_hop_v4) = next_hop {
+                if let Some(arp_entry) = self.arp_cache.lookup(&next_hop) {
+                    debug!(
+                        "ARP entry found for {}: MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                        next_hop,
+                        arp_entry.mac[0],
+                        arp_entry.mac[1],
+                        arp_entry.mac[2],
+                        arp_entry.mac[3],
+                        arp_entry.mac[4],
+                        arp_entry.mac[5]
+                    );
+                }
+
+                let dest_addr = SocketAddr::new(IpAddr::V4(next_hop_v4), 0);
+                socket.send_to(payload, &dest_addr.into())?;
+                debug!(
+                    "Sent {} bytes to {} (next-hop: {}) via raw IPv4 socket",
+                    payload.len(),
+                    ipv4,
+                    next_hop_v4
+                );
+            } else {
+                anyhow::bail!("Next hop is not IPv4");
+            }
         } else {
             anyhow::bail!("Expected IPv4 address, got IPv6");
         }
@@ -327,9 +373,45 @@ impl N6Handler {
 
     fn forward_packet_v6(&self, socket: &Socket, payload: &[u8], dest_ip: IpAddr) -> Result<()> {
         if let IpAddr::V6(ipv6) = dest_ip {
-            let dest_addr = SocketAddr::new(IpAddr::V6(ipv6), 0);
-            socket.send_to(payload, &dest_addr.into())?;
-            debug!("Sent {} bytes to {} via raw IPv6 socket", payload.len(), ipv6);
+            let next_hop = match self.routing_table.lookup(&dest_ip) {
+                Some(route) => {
+                    debug!(
+                        "Route found for {}: via {:?} on interface {}",
+                        dest_ip, route.next_hop, route.interface
+                    );
+                    route.next_hop.unwrap_or(dest_ip)
+                }
+                None => {
+                    debug!("No route found for {}, using direct delivery", dest_ip);
+                    dest_ip
+                }
+            };
+
+            if let IpAddr::V6(next_hop_v6) = next_hop {
+                if let Some(arp_entry) = self.arp_cache.lookup(&next_hop) {
+                    debug!(
+                        "ARP entry found for {}: MAC={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                        next_hop,
+                        arp_entry.mac[0],
+                        arp_entry.mac[1],
+                        arp_entry.mac[2],
+                        arp_entry.mac[3],
+                        arp_entry.mac[4],
+                        arp_entry.mac[5]
+                    );
+                }
+
+                let dest_addr = SocketAddr::new(IpAddr::V6(next_hop_v6), 0);
+                socket.send_to(payload, &dest_addr.into())?;
+                debug!(
+                    "Sent {} bytes to {} (next-hop: {}) via raw IPv6 socket",
+                    payload.len(),
+                    ipv6,
+                    next_hop_v6
+                );
+            } else {
+                anyhow::bail!("Next hop is not IPv6");
+            }
         } else {
             anyhow::bail!("Expected IPv6 address, got IPv4");
         }

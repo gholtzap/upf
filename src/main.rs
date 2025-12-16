@@ -42,6 +42,12 @@ async fn main() -> Result<()> {
     let qos_manager = config.create_qos_manager();
     info!("QoS profile manager initialized");
 
+    let routing_table = config.create_routing_table()?;
+    info!("Routing table initialized with {} routes", routing_table.get_all_routes().len());
+
+    let arp_cache = config.create_arp_cache()?;
+    info!("ARP cache initialized with {} entries", arp_cache.get_all_entries().len());
+
     let session_manager = SessionManager::new_with_qos(qos_manager);
     let pfcp_server = PfcpServer::new_with_session_manager(
         config.n4_address.to_string(),
@@ -72,7 +78,9 @@ async fn main() -> Result<()> {
         config.n3_address,
         config.n6_interface.clone(),
         qos_manager_ref,
-        downlink_queue
+        downlink_queue,
+        routing_table,
+        arp_cache
     ).await?;
 
     info!("UPF initialized successfully");
