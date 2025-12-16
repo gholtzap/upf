@@ -301,6 +301,17 @@
 - Integration with SessionManager for QoS-aware operations
 - Full test coverage for QoS profile management
 
+## 44. Priority Queue Implementation
+- Two-level priority queue (high priority, normal)
+- Thread-safe queue data structures using Arc and Mutex
+- Priority-based dequeue logic (high priority packets dequeued first)
+- Queue size limits per priority level (configurable)
+- Overflow handling with QueueFull error reporting
+- FIFO ordering within each priority level
+- Queue statistics (len, high_priority_len, normal_priority_len)
+- Clear operation for queue reset
+- Full test coverage for all queue operations
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -327,12 +338,6 @@
 ## 2. Packet Processing (Simplified)
 
 ### 2.5 Basic QoS
-
-#### 2.5.2 Priority Queue Implementation
-- Two-level priority queue (high priority, normal)
-- Queue data structures for packet buffering
-- Priority-based dequeue logic
-- Queue size limits and overflow handling
 
 #### 2.5.3 Token Bucket Rate Limiting
 - Per-session token bucket implementation

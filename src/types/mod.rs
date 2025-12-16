@@ -5,6 +5,7 @@ pub mod session;
 pub mod uplink_packet;
 pub mod downlink_packet;
 pub mod qos;
+pub mod priority_queue;
 
 pub use identifiers::{SEID, TEID, PDRID, FARID, QFI};
 pub use pdr::{PDR, PDI, PacketDirection, SourceInterface};
@@ -13,3 +14,4 @@ pub use session::{Session, SessionStats, SessionStatus};
 pub use uplink_packet::UplinkPacket;
 pub use downlink_packet::DownlinkPacket;
 pub use qos::{QosProfile, QosProfileManager, PriorityLevel};
+pub use priority_queue::{PriorityQueue, QueuedPacket, QueueError};
