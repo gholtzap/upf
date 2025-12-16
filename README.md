@@ -359,6 +359,14 @@
 - Association marked as inactive after max retries exceeded
 - Full test coverage for retry logic, timeout handling, and request tracking
 
+## 49. QFI Information Element
+- IE type and structure definition (IE Type 124)
+- QFI value encoding/decoding (6-bit value, 0-63 range)
+- Parse and encode functions with proper bit masking
+- Validation for QFI value range (0-63)
+- Integration with InformationElement enum
+- Full test coverage for all QFI values and edge cases
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -366,13 +374,13 @@
 **Purpose:** Control plane communication with SMF
 
 #### 1.1.6 Essential Information Elements
-- PDR (Packet Detection Rule) encoding/decoding
-- FAR (Forwarding Action Rule) encoding/decoding
-- F-SEID (Session Endpoint Identifier)
-- UE IP Address
-- Network Instance
-- QFI (QoS Flow Identifier)
-- Apply Action (Forward/Drop/Buffer)
+- PDR (Packet Detection Rule) encoding/decoding (IMPLEMENTED - sections 23-26)
+- FAR (Forwarding Action Rule) encoding/decoding (IMPLEMENTED - section 25)
+- F-SEID (Session Endpoint Identifier) (IMPLEMENTED - section 14)
+- UE IP Address (IMPLEMENTED - section 15)
+- Network Instance (IMPLEMENTED - section 16)
+- QFI (QoS Flow Identifier) (IMPLEMENTED - section 49)
+- Apply Action (Forward/Drop/Buffer) (IMPLEMENTED - section 22)
 
 ### 1.2 GTP-U Protocol Foundation
 

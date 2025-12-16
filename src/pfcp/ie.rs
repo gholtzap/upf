@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
-use crate::types::identifiers::{SEID, PDRID, FARID};
+use crate::types::identifiers::{SEID, PDRID, FARID, QFI};
 
 #[derive(Debug, Error)]
 pub enum IeError {
@@ -21,6 +21,8 @@ pub enum IeError {
     InvalidSourceInterface(u8),
     #[error("Invalid destination interface: {0}")]
     InvalidDestinationInterface(u8),
+    #[error("Invalid QFI value: {0}")]
+    InvalidQfi(u8),
 }
 
 pub type IeResult<T> = Result<T, IeError>;
@@ -47,6 +49,7 @@ pub enum IeType {
     UeIpAddress = 93,
     RecoveryTimeStamp = 96,
     FarId = 108,
+    Qfi = 124,
 }
 
 impl IeType {
@@ -71,6 +74,7 @@ impl IeType {
             93 => Ok(IeType::UeIpAddress),
             96 => Ok(IeType::RecoveryTimeStamp),
             108 => Ok(IeType::FarId),
+            124 => Ok(IeType::Qfi),
             _ => Err(IeError::InvalidType(value)),
         }
     }
@@ -464,6 +468,37 @@ impl Precedence {
 
     pub fn len(&self) -> usize {
         4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QfiIe(pub QFI);
+
+impl QfiIe {
+    pub fn new(qfi: QFI) -> IeResult<Self> {
+        if qfi.0 > 63 {
+            return Err(IeError::InvalidQfi(qfi.0));
+        }
+        Ok(QfiIe(qfi))
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+        let value = buf.get_u8() & 0x3F;
+        Ok(QfiIe(QFI(value)))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u8(self.0.0 & 0x3F);
+    }
+
+    pub fn len(&self) -> usize {
+        1
     }
 }
 
@@ -1355,6 +1390,7 @@ pub enum InformationElement {
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
+    Qfi(QfiIe),
 }
 
 impl InformationElement {
@@ -1412,6 +1448,7 @@ impl InformationElement {
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
+            IeType::Qfi => Ok(InformationElement::Qfi(QfiIe::parse(&mut value_buf)?)),
         }
     }
 
@@ -1511,6 +1548,11 @@ impl InformationElement {
                 buf.put_u16(IeType::UsageReportSdr as u16);
                 buf.put_u16(usage_report.len() as u16);
                 usage_report.encode(buf);
+            }
+            InformationElement::Qfi(qfi) => {
+                buf.put_u16(IeType::Qfi as u16);
+                buf.put_u16(qfi.len() as u16);
+                qfi.encode(buf);
             }
         }
     }
@@ -2253,5 +2295,99 @@ mod tests {
         let parsed = InformationElement::parse(&mut bytes).unwrap();
 
         assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_qfi_basic() {
+        let qfi = QfiIe::new(QFI(5)).unwrap();
+
+        let mut buf = BytesMut::new();
+        qfi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = QfiIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(qfi, parsed);
+        assert_eq!(qfi.0.0, 5);
+    }
+
+    #[test]
+    fn test_qfi_min_value() {
+        let qfi = QfiIe::new(QFI(0)).unwrap();
+
+        let mut buf = BytesMut::new();
+        qfi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = QfiIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(qfi, parsed);
+        assert_eq!(qfi.0.0, 0);
+    }
+
+    #[test]
+    fn test_qfi_max_value() {
+        let qfi = QfiIe::new(QFI(63)).unwrap();
+
+        let mut buf = BytesMut::new();
+        qfi.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = QfiIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(qfi, parsed);
+        assert_eq!(qfi.0.0, 63);
+    }
+
+    #[test]
+    fn test_qfi_invalid_value() {
+        let result = QfiIe::new(QFI(64));
+        assert!(result.is_err());
+
+        let result = QfiIe::new(QFI(100));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_qfi_masking() {
+        let mut buf = BytesMut::new();
+        buf.put_u8(0xFF);
+
+        let mut bytes = buf.freeze();
+        let parsed = QfiIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(parsed.0.0, 63);
+    }
+
+    #[test]
+    fn test_qfi_ie_encoding() {
+        let qfi = QfiIe::new(QFI(9)).unwrap();
+        let ie = InformationElement::Qfi(qfi);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_qfi_common_values() {
+        let test_values = vec![1, 5, 9, 32, 63];
+
+        for value in test_values {
+            let qfi = QfiIe::new(QFI(value)).unwrap();
+
+            let mut buf = BytesMut::new();
+            qfi.encode(&mut buf);
+
+            let mut bytes = buf.freeze();
+            let parsed = QfiIe::parse(&mut bytes).unwrap();
+
+            assert_eq!(qfi, parsed);
+            assert_eq!(parsed.0.0, value);
+        }
     }
 }
