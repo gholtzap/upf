@@ -1,4 +1,5 @@
 use super::echo::{create_echo_response, is_echo_request};
+use super::end_marker::{is_end_marker, validate_end_marker};
 use super::error_indication::create_error_indication;
 use super::gpdu::{parse_and_process_gpdu, GPduInfo};
 use super::header::{GtpuError, GtpuMessage};
@@ -69,6 +70,11 @@ impl N3Handler {
             return self.handle_echo_request(msg, peer_addr).await;
         }
 
+        if is_end_marker(&msg) {
+            debug!("Received End Marker from {}", peer_addr);
+            return self.handle_end_marker(msg, peer_addr).await;
+        }
+
         match parse_and_process_gpdu(data) {
             Ok(gpdu_info) => {
                 debug!(
@@ -103,6 +109,26 @@ impl N3Handler {
 
         self.socket.send_to(&encoded, peer_addr).await?;
         debug!("Sent Echo Response to {}", peer_addr);
+
+        Ok(())
+    }
+
+    async fn handle_end_marker(
+        &self,
+        msg: GtpuMessage,
+        peer_addr: SocketAddr,
+    ) -> Result<()> {
+        if let Err(e) = validate_end_marker(&msg) {
+            warn!("Invalid End Marker from {}: {}", peer_addr, e);
+            return Err(e.into());
+        }
+
+        info!(
+            "Received End Marker from {} for TEID {} (seq: {:?}) - Path switch completed",
+            peer_addr,
+            msg.header.teid,
+            msg.header.sequence_number
+        );
 
         Ok(())
     }

@@ -283,6 +283,15 @@
 - Full test coverage for IPv4 and IPv6 peer addresses
 - Message parsing and validation
 
+## 42. GTP-U End Marker
+- End Marker message creation and parsing
+- Message validation for End Marker
+- Support for sequence number in End Marker messages
+- Path switch indication handling
+- Integration with N3 interface handler
+- End Marker reception logging and processing
+- Full test coverage for End Marker functionality
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -299,9 +308,6 @@
 - Apply Action (Forward/Drop/Buffer)
 
 ### 1.2 GTP-U Protocol Foundation
-#### 1.2.5 GTP-U End Marker
-- End Marker message parsing
-- Path switch support
 
 ### 1.3 Basic IP Routing
 - IPv4 packet forwarding
