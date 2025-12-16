@@ -1,5 +1,5 @@
 use crate::types::far::FAR;
-use crate::types::identifiers::{SEID, TEID};
+use crate::types::identifiers::{QFI, SEID, TEID};
 use crate::types::pdr::PDR;
 use crate::types::token_bucket::TokenBucket;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,7 @@ pub struct Session {
     pub fars: Vec<FAR>,
     pub stats: SessionStats,
     pub status: SessionStatus,
+    pub default_qfi: QFI,
     #[serde(skip)]
     pub uplink_token_bucket: Option<TokenBucket>,
     #[serde(skip)]

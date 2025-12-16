@@ -80,6 +80,10 @@ impl SessionManager {
     pub fn get_priority(&self, qfi: QFI) -> PriorityLevel {
         self.qos_manager.get_priority(qfi)
     }
+
+    pub fn qos_manager(&self) -> Arc<QosProfileManager> {
+        Arc::clone(&self.qos_manager)
+    }
 }
 
 impl Default for SessionManager {
@@ -108,6 +112,7 @@ mod tests {
             fars: Vec::new(),
             stats: SessionStats::default(),
             status: SessionStatus::Active,
+            default_qfi: QFI(9),
             uplink_token_bucket: None,
             downlink_token_bucket: None,
         };
@@ -139,6 +144,7 @@ mod tests {
             fars: Vec::new(),
             stats: SessionStats::default(),
             status: SessionStatus::Active,
+            default_qfi: QFI(9),
             uplink_token_bucket: None,
             downlink_token_bucket: None,
         };

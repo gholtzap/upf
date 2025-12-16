@@ -10,7 +10,9 @@ use clap::Parser;
 use log::{info, error};
 use pfcp::{PfcpServer, SessionManager};
 use gtpu::{N3Handler, N6Handler};
+use types::priority_queue::PriorityQueue;
 use tokio::sync::mpsc;
+use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(name = "upf")]
@@ -49,13 +51,28 @@ async fn main() -> Result<()> {
 
     let (uplink_tx, uplink_rx) = mpsc::channel(1000);
 
-    let n3_handler = N3Handler::new(config.n3_address, session_manager.clone(), Some(uplink_tx)).await?;
+    let uplink_queue = Arc::new(PriorityQueue::new(10000));
+    let downlink_queue = Arc::new(PriorityQueue::new(10000));
+    let qos_manager_ref = session_manager.qos_manager();
+
+    info!("Created priority queues for QoS-aware packet forwarding");
+
+    let n3_handler = N3Handler::new(
+        config.n3_address,
+        session_manager.clone(),
+        Some(uplink_tx),
+        qos_manager_ref.clone(),
+        uplink_queue.clone()
+    ).await?;
+
     let n6_handler = N6Handler::new(
         session_manager,
         uplink_rx,
         config.n6_address,
         config.n3_address,
-        config.n6_interface.clone()
+        config.n6_interface.clone(),
+        qos_manager_ref,
+        downlink_queue
     ).await?;
 
     info!("UPF initialized successfully");

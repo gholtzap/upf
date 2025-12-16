@@ -321,6 +321,18 @@
 - Integration with Session structure
 - Full test coverage for all token bucket operations
 
+## 46. QoS-Aware Packet Forwarding
+- QFI extraction from GTP-U extension headers for uplink packets
+- Default QFI assignment to sessions for downlink packets
+- QFI-based QoS profile lookup via QosProfileManager
+- Priority determination from QoS profiles (High/Normal)
+- Token bucket rate limiting check before packet forwarding
+- Priority queue integration for uplink and downlink paths
+- Packet enqueue with priority-based classification
+- QoS-aware logging with QFI and priority information
+- Rate limit enforcement with packet dropping on token exhaustion
+- Integration with N3 and N6 packet forwarding handlers
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -347,13 +359,6 @@
 ## 2. Packet Processing (Simplified)
 
 ### 2.5 Basic QoS
-
-#### 2.5.4 QoS-Aware Packet Forwarding
-- QFI extraction from GTP-U extension headers
-- QFI-based QoS profile lookup
-- Priority queue enqueue/dequeue in forwarding path
-- Token bucket check before forwarding
-- Integration with N6 packet forwarding
 
 ## 3. Session Management
 

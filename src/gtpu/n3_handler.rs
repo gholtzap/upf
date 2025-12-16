@@ -7,6 +7,8 @@ use crate::far_engine::{FarEngine, ForwardingDecision};
 use crate::packet_classifier::{PacketClassifier, PacketContext};
 use crate::pfcp::session_manager::SessionManager;
 use crate::types::pdr::SourceInterface;
+use crate::types::priority_queue::PriorityQueue;
+use crate::types::qos::QosProfileManager;
 use crate::types::UplinkPacket;
 use anyhow::Result;
 use bytes::Bytes;
@@ -20,6 +22,8 @@ pub struct N3Handler {
     socket: Arc<UdpSocket>,
     session_manager: SessionManager,
     uplink_sender: Option<mpsc::Sender<UplinkPacket>>,
+    qos_manager: Arc<QosProfileManager>,
+    uplink_queue: Arc<PriorityQueue>,
 }
 
 impl N3Handler {
@@ -27,6 +31,8 @@ impl N3Handler {
         bind_addr: SocketAddr,
         session_manager: SessionManager,
         uplink_sender: Option<mpsc::Sender<UplinkPacket>>,
+        qos_manager: Arc<QosProfileManager>,
+        uplink_queue: Arc<PriorityQueue>,
     ) -> Result<Self> {
         let socket = UdpSocket::bind(bind_addr).await?;
         info!("N3 interface bound to {}", bind_addr);
@@ -35,6 +41,8 @@ impl N3Handler {
             socket: Arc::new(socket),
             session_manager,
             uplink_sender,
+            qos_manager,
+            uplink_queue,
         })
     }
 
@@ -135,13 +143,37 @@ impl N3Handler {
 
     async fn handle_gpdu(&self, gpdu_info: GPduInfo, peer_addr: SocketAddr) -> Result<()> {
         match self.session_manager.get_session_by_teid(&gpdu_info.teid) {
-            Some(session) => {
+            Some(mut session) => {
                 debug!(
                     "Found session for TEID {}: UE IP={}, SEID={}",
                     gpdu_info.teid.0, session.ue_ip, session.seid.0
                 );
 
                 let payload_len = gpdu_info.payload.len();
+
+                let qfi = gpdu_info.qfi.unwrap_or(session.default_qfi);
+                let priority = self.qos_manager.get_priority(qfi);
+                debug!(
+                    "QFI={}, Priority={:?} for uplink packet from TEID={}",
+                    qfi.0, priority, gpdu_info.teid.0
+                );
+
+                let rate_limit_passed = if let Some(ref mut token_bucket) = session.uplink_token_bucket {
+                    let allowed = token_bucket.try_consume(payload_len);
+                    if !allowed {
+                        warn!(
+                            "Rate limit exceeded for uplink packet: TEID={}, size={} bytes, QFI={}",
+                            gpdu_info.teid.0, payload_len, qfi.0
+                        );
+                    }
+                    allowed
+                } else {
+                    true
+                };
+
+                if !rate_limit_passed {
+                    return Ok(());
+                }
 
                 let context = PacketContext {
                     source_interface: SourceInterface::Access,
@@ -163,13 +195,18 @@ impl N3Handler {
                                     match_result.far_id.0, forwarding_info.destination_interface
                                 );
 
-                                let payload_len = gpdu_info.payload.len();
-
                                 self.session_manager.update_session(&session.seid, |s| {
                                     s.stats.uplink_packets += 1;
                                     s.stats.uplink_bytes += payload_len as u64;
                                     s.stats.last_activity = std::time::SystemTime::now();
                                 });
+
+                                if let Err(e) = self.uplink_queue.enqueue(gpdu_info.payload.clone(), priority) {
+                                    error!(
+                                        "Failed to enqueue uplink packet: {:?}, forwarding directly",
+                                        e
+                                    );
+                                }
 
                                 if let Some(sender) = &self.uplink_sender {
                                     let uplink_packet = UplinkPacket {
@@ -181,13 +218,14 @@ impl N3Handler {
                                         error!("Failed to forward uplink packet to N6: {}", e);
                                     } else {
                                         info!(
-                                            "Forwarded uplink packet: TEID={}, UE_IP={}, size={} bytes, PDR={}, FAR={}, QFI={:?}",
+                                            "Forwarded uplink packet: TEID={}, UE_IP={}, size={} bytes, PDR={}, FAR={}, QFI={}, Priority={:?}",
                                             gpdu_info.teid.0,
                                             session.ue_ip,
                                             payload_len,
                                             match_result.pdr_id.0,
                                             match_result.far_id.0,
-                                            gpdu_info.qfi
+                                            qfi.0,
+                                            priority
                                         );
                                     }
                                 }

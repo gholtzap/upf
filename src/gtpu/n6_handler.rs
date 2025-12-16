@@ -4,6 +4,8 @@ use crate::gtpu::types::MessageType;
 use crate::packet_classifier::{PacketClassifier, PacketContext};
 use crate::pfcp::session_manager::SessionManager;
 use crate::types::pdr::SourceInterface;
+use crate::types::priority_queue::PriorityQueue;
+use crate::types::qos::QosProfileManager;
 use crate::types::UplinkPacket;
 use anyhow::Result;
 use bytes::Bytes;
@@ -22,6 +24,8 @@ pub struct N6Handler {
     interface_name: String,
     raw_socket_v4: Option<Socket>,
     raw_socket_v6: Option<Socket>,
+    qos_manager: Arc<QosProfileManager>,
+    downlink_queue: Arc<PriorityQueue>,
 }
 
 impl N6Handler {
@@ -31,6 +35,8 @@ impl N6Handler {
         n6_address: SocketAddr,
         n3_address: SocketAddr,
         interface_name: String,
+        qos_manager: Arc<QosProfileManager>,
+        downlink_queue: Arc<PriorityQueue>,
     ) -> Result<Self> {
         let downlink_socket = UdpSocket::bind(n6_address).await?;
         info!("N6 interface bound to {} for downlink reception", n6_address);
@@ -69,6 +75,8 @@ impl N6Handler {
             interface_name,
             raw_socket_v4,
             raw_socket_v6,
+            qos_manager,
+            downlink_queue,
         })
     }
 
@@ -433,11 +441,36 @@ impl N6Handler {
         );
 
         match self.session_manager.get_session_by_ue_ip(&dst_ue_ip) {
-            Some(session) => {
+            Some(mut session) => {
                 debug!(
                     "Found session for downlink to UE {}: SEID={}, TEID={}, RAN={}",
                     dst_ue_ip, session.seid.0, session.uplink_teid.0, session.ran_address
                 );
+
+                let payload_len = payload.len();
+                let qfi = session.default_qfi;
+                let priority = self.qos_manager.get_priority(qfi);
+                debug!(
+                    "QFI={}, Priority={:?} for downlink packet to UE {}",
+                    qfi.0, priority, dst_ue_ip
+                );
+
+                let rate_limit_passed = if let Some(ref mut token_bucket) = session.downlink_token_bucket {
+                    let allowed = token_bucket.try_consume(payload_len);
+                    if !allowed {
+                        warn!(
+                            "Rate limit exceeded for downlink packet: UE_IP={}, size={} bytes, QFI={}",
+                            dst_ue_ip, payload_len, qfi.0
+                        );
+                    }
+                    allowed
+                } else {
+                    true
+                };
+
+                if !rate_limit_passed {
+                    return Ok(());
+                }
 
                 let context = PacketContext {
                     source_interface: SourceInterface::Core,
@@ -459,6 +492,13 @@ impl N6Handler {
                                     match_result.far_id.0, forwarding_info.destination_interface, dst_ue_ip
                                 );
 
+                                if let Err(e) = self.downlink_queue.enqueue(payload.clone(), priority) {
+                                    error!(
+                                        "Failed to enqueue downlink packet: {:?}, forwarding directly",
+                                        e
+                                    );
+                                }
+
                                 let gtpu_msg = GtpuMessage::new(
                                     MessageType::GPDU,
                                     session.uplink_teid.0,
@@ -475,13 +515,15 @@ impl N6Handler {
                                 });
 
                                 info!(
-                                    "Forwarded downlink packet: UE_IP={}, RAN={}, TEID={}, size={} bytes, PDR={}, FAR={}",
+                                    "Forwarded downlink packet: UE_IP={}, RAN={}, TEID={}, size={} bytes, PDR={}, FAR={}, QFI={}, Priority={:?}",
                                     dst_ue_ip,
                                     session.ran_address,
                                     session.uplink_teid.0,
                                     payload.len(),
                                     match_result.pdr_id.0,
-                                    match_result.far_id.0
+                                    match_result.far_id.0,
+                                    qfi.0,
+                                    priority
                                 );
                             }
                             Some(ForwardingDecision::Drop) => {

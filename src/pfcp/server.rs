@@ -5,7 +5,7 @@ use super::association::{Association, AssociationManager};
 use super::session_manager::SessionManager;
 use super::ie::{NodeId, RecoveryTimeStamp, FSeid, SourceInterface, DestinationInterface, UsageReportSdr, VolumeMeasurement, DurationMeasurement};
 use crate::types::session::{Session, SessionStats, SessionStatus};
-use crate::types::identifiers::{SEID, TEID};
+use crate::types::identifiers::{QFI, SEID, TEID};
 use crate::types::pdr::{PDR, PDI, SourceInterface as PdrSourceInterface};
 use crate::types::far::{FAR, ForwardingAction, DestinationInterface as FarDestinationInterface};
 use bytes::Bytes;
@@ -305,6 +305,7 @@ impl PfcpServer {
             fars,
             stats: SessionStats::default(),
             status: SessionStatus::Active,
+            default_qfi: QFI(9),
             uplink_token_bucket: None,
             downlink_token_bucket: None,
         };
