@@ -41,6 +41,7 @@ pub enum IeType {
     SourceInterface = 20,
     NetworkInstance = 22,
     Precedence = 29,
+    VolumeThreshold = 31,
     ReportingTriggers = 37,
     DestinationInterface = 42,
     ApplyAction = 44,
@@ -70,6 +71,7 @@ impl IeType {
             20 => Ok(IeType::SourceInterface),
             22 => Ok(IeType::NetworkInstance),
             29 => Ok(IeType::Precedence),
+            31 => Ok(IeType::VolumeThreshold),
             37 => Ok(IeType::ReportingTriggers),
             42 => Ok(IeType::DestinationInterface),
             44 => Ok(IeType::ApplyAction),
@@ -1620,6 +1622,120 @@ impl VolumeMeasurement {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VolumeThreshold {
+    pub total_volume: Option<u64>,
+    pub uplink_volume: Option<u64>,
+    pub downlink_volume: Option<u64>,
+}
+
+impl VolumeThreshold {
+    pub fn new(total_volume: Option<u64>, uplink_volume: Option<u64>, downlink_volume: Option<u64>) -> Self {
+        VolumeThreshold {
+            total_volume,
+            uplink_volume,
+            downlink_volume,
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+
+        let flags = buf.get_u8();
+        let total = (flags & 0x01) != 0;
+        let uplink = (flags & 0x02) != 0;
+        let downlink = (flags & 0x04) != 0;
+
+        let total_volume = if total {
+            if buf.remaining() < 8 {
+                return Err(IeError::BufferTooShort {
+                    needed: 8,
+                    available: buf.remaining(),
+                });
+            }
+            Some(buf.get_u64())
+        } else {
+            None
+        };
+
+        let uplink_volume = if uplink {
+            if buf.remaining() < 8 {
+                return Err(IeError::BufferTooShort {
+                    needed: 8,
+                    available: buf.remaining(),
+                });
+            }
+            Some(buf.get_u64())
+        } else {
+            None
+        };
+
+        let downlink_volume = if downlink {
+            if buf.remaining() < 8 {
+                return Err(IeError::BufferTooShort {
+                    needed: 8,
+                    available: buf.remaining(),
+                });
+            }
+            Some(buf.get_u64())
+        } else {
+            None
+        };
+
+        Ok(VolumeThreshold {
+            total_volume,
+            uplink_volume,
+            downlink_volume,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        let mut flags = 0u8;
+        if self.total_volume.is_some() {
+            flags |= 0x01;
+        }
+        if self.uplink_volume.is_some() {
+            flags |= 0x02;
+        }
+        if self.downlink_volume.is_some() {
+            flags |= 0x04;
+        }
+
+        buf.put_u8(flags);
+
+        if let Some(total) = self.total_volume {
+            buf.put_u64(total);
+        }
+
+        if let Some(uplink) = self.uplink_volume {
+            buf.put_u64(uplink);
+        }
+
+        if let Some(downlink) = self.downlink_volume {
+            buf.put_u64(downlink);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 1;
+        if self.total_volume.is_some() {
+            len += 8;
+        }
+        if self.uplink_volume.is_some() {
+            len += 8;
+        }
+        if self.downlink_volume.is_some() {
+            len += 8;
+        }
+        len
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DurationMeasurement(pub u32);
 
 impl DurationMeasurement {
@@ -1751,6 +1867,7 @@ pub enum InformationElement {
     CreateFar(CreateFar),
     UpdatePdr(UpdatePdr),
     UpdateFar(UpdateFar),
+    VolumeThreshold(VolumeThreshold),
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
@@ -1813,6 +1930,7 @@ impl InformationElement {
             IeType::CreateFar => Ok(InformationElement::CreateFar(CreateFar::parse(&mut value_buf)?)),
             IeType::UpdatePdr => Ok(InformationElement::UpdatePdr(UpdatePdr::parse(&mut value_buf)?)),
             IeType::UpdateFar => Ok(InformationElement::UpdateFar(UpdateFar::parse(&mut value_buf)?)),
+            IeType::VolumeThreshold => Ok(InformationElement::VolumeThreshold(VolumeThreshold::parse(&mut value_buf)?)),
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
@@ -1917,6 +2035,11 @@ impl InformationElement {
                 buf.put_u16(IeType::UpdateFar as u16);
                 buf.put_u16(update_far.len() as u16);
                 update_far.encode(buf);
+            }
+            InformationElement::VolumeThreshold(threshold) => {
+                buf.put_u16(IeType::VolumeThreshold as u16);
+                buf.put_u16(threshold.len() as u16);
+                threshold.encode(buf);
             }
             InformationElement::VolumeMeasurement(volume) => {
                 buf.put_u16(IeType::VolumeMeasurement as u16);
@@ -3194,5 +3317,122 @@ mod tests {
             assert_eq!(pst, parsed);
             assert_eq!(parsed.0, pdu_type);
         }
+    }
+
+    #[test]
+    fn test_volume_threshold_all_fields() {
+        let threshold = VolumeThreshold::new(Some(1000), Some(600), Some(400));
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 25);
+        assert_eq!(buf[0], 0x07);
+
+        let mut bytes = buf.freeze();
+        let parsed = VolumeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.total_volume, Some(1000));
+        assert_eq!(parsed.uplink_volume, Some(600));
+        assert_eq!(parsed.downlink_volume, Some(400));
+    }
+
+    #[test]
+    fn test_volume_threshold_total_only() {
+        let threshold = VolumeThreshold::new(Some(5000), None, None);
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 9);
+        assert_eq!(buf[0], 0x01);
+
+        let mut bytes = buf.freeze();
+        let parsed = VolumeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.total_volume, Some(5000));
+        assert_eq!(parsed.uplink_volume, None);
+        assert_eq!(parsed.downlink_volume, None);
+    }
+
+    #[test]
+    fn test_volume_threshold_uplink_downlink() {
+        let threshold = VolumeThreshold::new(None, Some(3000), Some(2000));
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 17);
+        assert_eq!(buf[0], 0x06);
+
+        let mut bytes = buf.freeze();
+        let parsed = VolumeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.total_volume, None);
+        assert_eq!(parsed.uplink_volume, Some(3000));
+        assert_eq!(parsed.downlink_volume, Some(2000));
+    }
+
+    #[test]
+    fn test_volume_threshold_empty() {
+        let threshold = VolumeThreshold::new(None, None, None);
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 1);
+        assert_eq!(buf[0], 0x00);
+
+        let mut bytes = buf.freeze();
+        let parsed = VolumeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.total_volume, None);
+        assert_eq!(parsed.uplink_volume, None);
+        assert_eq!(parsed.downlink_volume, None);
+    }
+
+    #[test]
+    fn test_volume_threshold_ie_encoding() {
+        let threshold = VolumeThreshold::new(Some(10000), Some(6000), Some(4000));
+        let ie = InformationElement::VolumeThreshold(threshold);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_volume_threshold_buffer_too_short() {
+        let mut buf = Bytes::new();
+        let result = VolumeThreshold::parse(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_volume_threshold_large_values() {
+        let threshold = VolumeThreshold::new(
+            Some(u64::MAX),
+            Some(u64::MAX - 1),
+            Some(u64::MAX - 2),
+        );
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = VolumeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.total_volume, Some(u64::MAX));
+        assert_eq!(parsed.uplink_volume, Some(u64::MAX - 1));
+        assert_eq!(parsed.downlink_volume, Some(u64::MAX - 2));
     }
 }

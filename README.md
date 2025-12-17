@@ -408,12 +408,23 @@
 - Full test coverage for all flag combinations and variable-length encoding
 - Foundation for URR trigger configuration
 
+## 54. Volume Threshold Information Element
+- Volume Threshold Information Element (IE Type 31)
+- Flag-based structure for volume threshold configuration
+- Optional total volume threshold (u64)
+- Optional uplink volume threshold (u64)
+- Optional downlink volume threshold (u64)
+- Variable-length encoding (1-25 octets based on flags set)
+- Parse and encode functions with proper bit flag handling
+- Integration with InformationElement enum
+- Full test coverage for all flag combinations and edge cases
+- Foundation for URR volume-based reporting triggers
+
 # Not implemented Features
 ## 1. URR (Usage Reporting Rule) Support - Breakdown
 **Purpose:** Advanced usage tracking, quota management, and event-based reporting
 
 ### Individual Information Elements (Implement in order)
-- Volume Threshold Information Element (IE Type 31)
 - Time Threshold Information Element (IE Type 32)
 - Quota Holding Time Information Element (IE Type 71)
 - Measurement Period Information Element (IE Type 64)
