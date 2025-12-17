@@ -50,9 +50,12 @@ pub enum IeType {
     FSeid = 57,
     NodeId = 60,
     MeasurementMethod = 62,
+    MeasurementPeriod = 64,
     VolumeMeasurement = 66,
     DurationMeasurement = 67,
     QuotaHoldingTime = 71,
+    StartTime = 75,
+    EndTime = 76,
     UsageReportSdr = 79,
     UrrId = 81,
     UeIpAddress = 93,
@@ -82,9 +85,12 @@ impl IeType {
             57 => Ok(IeType::FSeid),
             60 => Ok(IeType::NodeId),
             62 => Ok(IeType::MeasurementMethod),
+            64 => Ok(IeType::MeasurementPeriod),
             66 => Ok(IeType::VolumeMeasurement),
             67 => Ok(IeType::DurationMeasurement),
             71 => Ok(IeType::QuotaHoldingTime),
+            75 => Ok(IeType::StartTime),
+            76 => Ok(IeType::EndTime),
             79 => Ok(IeType::UsageReportSdr),
             81 => Ok(IeType::UrrId),
             93 => Ok(IeType::UeIpAddress),
@@ -851,6 +857,87 @@ impl QuotaHoldingTime {
             });
         }
         Ok(QuotaHoldingTime(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeasurementPeriod(pub u32);
+
+impl MeasurementPeriod {
+    pub fn new(value: u32) -> Self {
+        MeasurementPeriod(value)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(MeasurementPeriod(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StartTime(pub u32);
+
+impl StartTime {
+    pub fn new(value: u32) -> Self {
+        StartTime(value)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(StartTime(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EndTime(pub u32);
+
+impl EndTime {
+    pub fn new(value: u32) -> Self {
+        EndTime(value)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(EndTime(buf.get_u32()))
     }
 
     pub fn encode(&self, buf: &mut BytesMut) {
@@ -1914,6 +2001,7 @@ pub enum InformationElement {
     FarId(FarId),
     UrrId(UrrId),
     MeasurementMethod(MeasurementMethod),
+    MeasurementPeriod(MeasurementPeriod),
     ReportingTriggers(ReportingTriggers),
     NetworkInstance(NetworkInstance),
     Precedence(Precedence),
@@ -1928,6 +2016,8 @@ pub enum InformationElement {
     VolumeThreshold(VolumeThreshold),
     TimeThreshold(TimeThreshold),
     QuotaHoldingTime(QuotaHoldingTime),
+    StartTime(StartTime),
+    EndTime(EndTime),
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
@@ -1969,6 +2059,7 @@ impl InformationElement {
             IeType::FarId => Ok(InformationElement::FarId(FarId::parse(&mut value_buf)?)),
             IeType::UrrId => Ok(InformationElement::UrrId(UrrId::parse(&mut value_buf)?)),
             IeType::MeasurementMethod => Ok(InformationElement::MeasurementMethod(MeasurementMethod::parse(&mut value_buf)?)),
+            IeType::MeasurementPeriod => Ok(InformationElement::MeasurementPeriod(MeasurementPeriod::parse(&mut value_buf)?)),
             IeType::ReportingTriggers => Ok(InformationElement::ReportingTriggers(ReportingTriggers::parse(&mut value_buf)?)),
             IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
                 NetworkInstance::parse(&mut value_buf)?,
@@ -1993,6 +2084,8 @@ impl InformationElement {
             IeType::VolumeThreshold => Ok(InformationElement::VolumeThreshold(VolumeThreshold::parse(&mut value_buf)?)),
             IeType::TimeThreshold => Ok(InformationElement::TimeThreshold(TimeThreshold::parse(&mut value_buf)?)),
             IeType::QuotaHoldingTime => Ok(InformationElement::QuotaHoldingTime(QuotaHoldingTime::parse(&mut value_buf)?)),
+            IeType::StartTime => Ok(InformationElement::StartTime(StartTime::parse(&mut value_buf)?)),
+            IeType::EndTime => Ok(InformationElement::EndTime(EndTime::parse(&mut value_buf)?)),
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
@@ -2042,6 +2135,11 @@ impl InformationElement {
                 buf.put_u16(IeType::MeasurementMethod as u16);
                 buf.put_u16(measurement_method.len() as u16);
                 measurement_method.encode(buf);
+            }
+            InformationElement::MeasurementPeriod(measurement_period) => {
+                buf.put_u16(IeType::MeasurementPeriod as u16);
+                buf.put_u16(measurement_period.len() as u16);
+                measurement_period.encode(buf);
             }
             InformationElement::ReportingTriggers(reporting_triggers) => {
                 buf.put_u16(IeType::ReportingTriggers as u16);
@@ -2112,6 +2210,16 @@ impl InformationElement {
                 buf.put_u16(IeType::QuotaHoldingTime as u16);
                 buf.put_u16(quota_holding_time.len() as u16);
                 quota_holding_time.encode(buf);
+            }
+            InformationElement::StartTime(start_time) => {
+                buf.put_u16(IeType::StartTime as u16);
+                buf.put_u16(start_time.len() as u16);
+                start_time.encode(buf);
+            }
+            InformationElement::EndTime(end_time) => {
+                buf.put_u16(IeType::EndTime as u16);
+                buf.put_u16(end_time.len() as u16);
+                end_time.encode(buf);
             }
             InformationElement::VolumeMeasurement(volume) => {
                 buf.put_u16(IeType::VolumeMeasurement as u16);
@@ -3643,6 +3751,213 @@ mod tests {
     fn test_quota_holding_time_buffer_too_short() {
         let mut buf = Bytes::from(&[0u8, 1, 2][..]);
         let result = QuotaHoldingTime::parse(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_measurement_period_basic() {
+        let period = MeasurementPeriod::new(3600);
+
+        let mut buf = BytesMut::new();
+        period.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementPeriod::parse(&mut bytes).unwrap();
+
+        assert_eq!(period, parsed);
+        assert_eq!(parsed.0, 3600);
+    }
+
+    #[test]
+    fn test_measurement_period_zero() {
+        let period = MeasurementPeriod::new(0);
+
+        let mut buf = BytesMut::new();
+        period.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementPeriod::parse(&mut bytes).unwrap();
+
+        assert_eq!(period, parsed);
+        assert_eq!(parsed.0, 0);
+    }
+
+    #[test]
+    fn test_measurement_period_max_value() {
+        let period = MeasurementPeriod::new(u32::MAX);
+
+        let mut buf = BytesMut::new();
+        period.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementPeriod::parse(&mut bytes).unwrap();
+
+        assert_eq!(period, parsed);
+        assert_eq!(parsed.0, u32::MAX);
+    }
+
+    #[test]
+    fn test_measurement_period_ie_encoding() {
+        let period = MeasurementPeriod::new(7200);
+        let ie = InformationElement::MeasurementPeriod(period);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_measurement_period_buffer_too_short() {
+        let mut buf = Bytes::from(&[0u8, 1, 2][..]);
+        let result = MeasurementPeriod::parse(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_start_time_basic() {
+        let start_time = StartTime::new(3918645600);
+
+        let mut buf = BytesMut::new();
+        start_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = StartTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(start_time, parsed);
+        assert_eq!(parsed.0, 3918645600);
+    }
+
+    #[test]
+    fn test_start_time_zero() {
+        let start_time = StartTime::new(0);
+
+        let mut buf = BytesMut::new();
+        start_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = StartTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(start_time, parsed);
+        assert_eq!(parsed.0, 0);
+    }
+
+    #[test]
+    fn test_start_time_max_value() {
+        let start_time = StartTime::new(u32::MAX);
+
+        let mut buf = BytesMut::new();
+        start_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = StartTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(start_time, parsed);
+        assert_eq!(parsed.0, u32::MAX);
+    }
+
+    #[test]
+    fn test_start_time_ie_encoding() {
+        let start_time = StartTime::new(3918645600);
+        let ie = InformationElement::StartTime(start_time);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_start_time_buffer_too_short() {
+        let mut buf = Bytes::from(&[0u8, 1, 2][..]);
+        let result = StartTime::parse(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_end_time_basic() {
+        let end_time = EndTime::new(3918645600);
+
+        let mut buf = BytesMut::new();
+        end_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = EndTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(end_time, parsed);
+        assert_eq!(parsed.0, 3918645600);
+    }
+
+    #[test]
+    fn test_end_time_zero() {
+        let end_time = EndTime::new(0);
+
+        let mut buf = BytesMut::new();
+        end_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = EndTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(end_time, parsed);
+        assert_eq!(parsed.0, 0);
+    }
+
+    #[test]
+    fn test_end_time_max_value() {
+        let end_time = EndTime::new(u32::MAX);
+
+        let mut buf = BytesMut::new();
+        end_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = EndTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(end_time, parsed);
+        assert_eq!(parsed.0, u32::MAX);
+    }
+
+    #[test]
+    fn test_end_time_ie_encoding() {
+        let end_time = EndTime::new(3918645600);
+        let ie = InformationElement::EndTime(end_time);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_end_time_buffer_too_short() {
+        let mut buf = Bytes::from(&[0u8, 1, 2][..]);
+        let result = EndTime::parse(&mut buf);
         assert!(result.is_err());
     }
 }

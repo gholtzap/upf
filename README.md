@@ -438,14 +438,36 @@
 - Full test coverage for all values and edge cases
 - Foundation for URR quota management
 
+## 57. Measurement Period Information Element
+- Measurement Period Information Element (IE Type 64)
+- IE type and structure definition
+- Measurement period value encoding/decoding (u32, in seconds)
+- Parse and encode functions
+- Integration with InformationElement enum
+- Full test coverage for all values and edge cases
+- Foundation for URR periodic measurement configuration
+
+## 58. Start Time Information Element
+- Start Time Information Element (IE Type 75)
+- IE type and structure definition
+- Start time value encoding/decoding (u32, NTP timestamp format)
+- Parse and encode functions
+- Integration with InformationElement enum
+- Full test coverage for all values and edge cases
+- Foundation for URR time-based reporting
+
+## 59. End Time Information Element
+- End Time Information Element (IE Type 76)
+- IE type and structure definition
+- End time value encoding/decoding (u32, NTP timestamp format)
+- Parse and encode functions
+- Integration with InformationElement enum
+- Full test coverage for all values and edge cases
+- Foundation for URR time-based reporting
+
 # Not implemented Features
 ## 1. URR (Usage Reporting Rule) Support - Breakdown
 **Purpose:** Advanced usage tracking, quota management, and event-based reporting
-
-### Individual Information Elements (Implement in order)
-- Measurement Period Information Element (IE Type 64)
-- Start Time Information Element (IE Type 75)
-- End Time Information Element (IE Type 76)
 
 ### URR Grouped Information Elements
 - Create URR Information Element (IE Type 6)
