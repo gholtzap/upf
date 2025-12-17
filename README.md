@@ -465,12 +465,22 @@
 - Full test coverage for all values and edge cases
 - Foundation for URR time-based reporting
 
+## 60. Create URR Information Element
+- Create URR grouped Information Element (IE Type 6)
+- IE type and structure definition
+- Mandatory fields: URR ID, Measurement Method, Reporting Triggers
+- Optional fields: Measurement Period, Volume Threshold, Time Threshold, Quota Holding Time, Start Time, End Time
+- Parse and encode functions with proper nested IE handling
+- Builder pattern with with_* methods for optional fields
+- Integration with InformationElement enum
+- Full test coverage for all field combinations and edge cases
+- Foundation for URR support in session establishment
+
 # Not implemented Features
 ## 1. URR (Usage Reporting Rule) Support - Breakdown
 **Purpose:** Advanced usage tracking, quota management, and event-based reporting
 
 ### URR Grouped Information Elements
-- Create URR Information Element (IE Type 6)
 - Update URR Information Element (IE Type 13)
 - Remove URR Information Element (IE Type 16)
 - Usage Report Session Modification Response (IE Type 78)

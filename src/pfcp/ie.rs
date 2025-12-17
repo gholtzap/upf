@@ -36,6 +36,7 @@ pub enum IeType {
     CreatePdr = 1,
     Pdi = 2,
     CreateFar = 3,
+    CreateUrr = 6,
     UpdatePdr = 7,
     UpdateFar = 10,
     SourceInterface = 20,
@@ -71,6 +72,7 @@ impl IeType {
             1 => Ok(IeType::CreatePdr),
             2 => Ok(IeType::Pdi),
             3 => Ok(IeType::CreateFar),
+            6 => Ok(IeType::CreateUrr),
             7 => Ok(IeType::UpdatePdr),
             10 => Ok(IeType::UpdateFar),
             20 => Ok(IeType::SourceInterface),
@@ -1991,6 +1993,218 @@ impl UsageReportSdr {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateUrr {
+    pub urr_id: UrrId,
+    pub measurement_method: MeasurementMethod,
+    pub reporting_triggers: ReportingTriggers,
+    pub measurement_period: Option<MeasurementPeriod>,
+    pub volume_threshold: Option<VolumeThreshold>,
+    pub time_threshold: Option<TimeThreshold>,
+    pub quota_holding_time: Option<QuotaHoldingTime>,
+    pub start_time: Option<StartTime>,
+    pub end_time: Option<EndTime>,
+}
+
+impl CreateUrr {
+    pub fn new(
+        urr_id: UrrId,
+        measurement_method: MeasurementMethod,
+        reporting_triggers: ReportingTriggers,
+    ) -> Self {
+        CreateUrr {
+            urr_id,
+            measurement_method,
+            reporting_triggers,
+            measurement_period: None,
+            volume_threshold: None,
+            time_threshold: None,
+            quota_holding_time: None,
+            start_time: None,
+            end_time: None,
+        }
+    }
+
+    pub fn with_measurement_period(mut self, measurement_period: MeasurementPeriod) -> Self {
+        self.measurement_period = Some(measurement_period);
+        self
+    }
+
+    pub fn with_volume_threshold(mut self, volume_threshold: VolumeThreshold) -> Self {
+        self.volume_threshold = Some(volume_threshold);
+        self
+    }
+
+    pub fn with_time_threshold(mut self, time_threshold: TimeThreshold) -> Self {
+        self.time_threshold = Some(time_threshold);
+        self
+    }
+
+    pub fn with_quota_holding_time(mut self, quota_holding_time: QuotaHoldingTime) -> Self {
+        self.quota_holding_time = Some(quota_holding_time);
+        self
+    }
+
+    pub fn with_start_time(mut self, start_time: StartTime) -> Self {
+        self.start_time = Some(start_time);
+        self
+    }
+
+    pub fn with_end_time(mut self, end_time: EndTime) -> Self {
+        self.end_time = Some(end_time);
+        self
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        let mut urr_id = None;
+        let mut measurement_method = None;
+        let mut reporting_triggers = None;
+        let mut measurement_period = None;
+        let mut volume_threshold = None;
+        let mut time_threshold = None;
+        let mut quota_holding_time = None;
+        let mut start_time = None;
+        let mut end_time = None;
+
+        while buf.remaining() >= 4 {
+            let ie_type = buf.get_u16();
+            let ie_len = buf.get_u16();
+
+            if buf.remaining() < ie_len as usize {
+                return Err(IeError::BufferTooShort {
+                    needed: ie_len as usize,
+                    available: buf.remaining(),
+                });
+            }
+
+            let mut value_buf = buf.split_to(ie_len as usize);
+
+            match IeType::from_u16(ie_type)? {
+                IeType::UrrId => {
+                    urr_id = Some(UrrId::parse(&mut value_buf)?);
+                }
+                IeType::MeasurementMethod => {
+                    measurement_method = Some(MeasurementMethod::parse(&mut value_buf)?);
+                }
+                IeType::ReportingTriggers => {
+                    reporting_triggers = Some(ReportingTriggers::parse(&mut value_buf)?);
+                }
+                IeType::MeasurementPeriod => {
+                    measurement_period = Some(MeasurementPeriod::parse(&mut value_buf)?);
+                }
+                IeType::VolumeThreshold => {
+                    volume_threshold = Some(VolumeThreshold::parse(&mut value_buf)?);
+                }
+                IeType::TimeThreshold => {
+                    time_threshold = Some(TimeThreshold::parse(&mut value_buf)?);
+                }
+                IeType::QuotaHoldingTime => {
+                    quota_holding_time = Some(QuotaHoldingTime::parse(&mut value_buf)?);
+                }
+                IeType::StartTime => {
+                    start_time = Some(StartTime::parse(&mut value_buf)?);
+                }
+                IeType::EndTime => {
+                    end_time = Some(EndTime::parse(&mut value_buf)?);
+                }
+                _ => {}
+            }
+        }
+
+        let urr_id = urr_id.ok_or(IeError::InvalidLength(0))?;
+        let measurement_method = measurement_method.ok_or(IeError::InvalidLength(0))?;
+        let reporting_triggers = reporting_triggers.ok_or(IeError::InvalidLength(0))?;
+
+        Ok(CreateUrr {
+            urr_id,
+            measurement_method,
+            reporting_triggers,
+            measurement_period,
+            volume_threshold,
+            time_threshold,
+            quota_holding_time,
+            start_time,
+            end_time,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u16(IeType::UrrId as u16);
+        buf.put_u16(self.urr_id.len() as u16);
+        self.urr_id.encode(buf);
+
+        buf.put_u16(IeType::MeasurementMethod as u16);
+        buf.put_u16(self.measurement_method.len() as u16);
+        self.measurement_method.encode(buf);
+
+        buf.put_u16(IeType::ReportingTriggers as u16);
+        buf.put_u16(self.reporting_triggers.len() as u16);
+        self.reporting_triggers.encode(buf);
+
+        if let Some(ref measurement_period) = self.measurement_period {
+            buf.put_u16(IeType::MeasurementPeriod as u16);
+            buf.put_u16(measurement_period.len() as u16);
+            measurement_period.encode(buf);
+        }
+
+        if let Some(ref volume_threshold) = self.volume_threshold {
+            buf.put_u16(IeType::VolumeThreshold as u16);
+            buf.put_u16(volume_threshold.len() as u16);
+            volume_threshold.encode(buf);
+        }
+
+        if let Some(ref time_threshold) = self.time_threshold {
+            buf.put_u16(IeType::TimeThreshold as u16);
+            buf.put_u16(time_threshold.len() as u16);
+            time_threshold.encode(buf);
+        }
+
+        if let Some(ref quota_holding_time) = self.quota_holding_time {
+            buf.put_u16(IeType::QuotaHoldingTime as u16);
+            buf.put_u16(quota_holding_time.len() as u16);
+            quota_holding_time.encode(buf);
+        }
+
+        if let Some(ref start_time) = self.start_time {
+            buf.put_u16(IeType::StartTime as u16);
+            buf.put_u16(start_time.len() as u16);
+            start_time.encode(buf);
+        }
+
+        if let Some(ref end_time) = self.end_time {
+            buf.put_u16(IeType::EndTime as u16);
+            buf.put_u16(end_time.len() as u16);
+            end_time.encode(buf);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut len = 0;
+        len += 4 + self.urr_id.len();
+        len += 4 + self.measurement_method.len();
+        len += 4 + self.reporting_triggers.len();
+        if let Some(ref measurement_period) = self.measurement_period {
+            len += 4 + measurement_period.len();
+        }
+        if let Some(ref volume_threshold) = self.volume_threshold {
+            len += 4 + volume_threshold.len();
+        }
+        if let Some(ref time_threshold) = self.time_threshold {
+            len += 4 + time_threshold.len();
+        }
+        if let Some(ref quota_holding_time) = self.quota_holding_time {
+            len += 4 + quota_holding_time.len();
+        }
+        if let Some(ref start_time) = self.start_time {
+            len += 4 + start_time.len();
+        }
+        if let Some(ref end_time) = self.end_time {
+            len += 4 + end_time.len();
+        }
+        len
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InformationElement {
     NodeId(NodeId),
@@ -2011,6 +2225,7 @@ pub enum InformationElement {
     Pdi(Pdi),
     CreatePdr(CreatePdr),
     CreateFar(CreateFar),
+    CreateUrr(CreateUrr),
     UpdatePdr(UpdatePdr),
     UpdateFar(UpdateFar),
     VolumeThreshold(VolumeThreshold),
@@ -2079,6 +2294,7 @@ impl InformationElement {
             IeType::Pdi => Ok(InformationElement::Pdi(Pdi::parse(&mut value_buf)?)),
             IeType::CreatePdr => Ok(InformationElement::CreatePdr(CreatePdr::parse(&mut value_buf)?)),
             IeType::CreateFar => Ok(InformationElement::CreateFar(CreateFar::parse(&mut value_buf)?)),
+            IeType::CreateUrr => Ok(InformationElement::CreateUrr(CreateUrr::parse(&mut value_buf)?)),
             IeType::UpdatePdr => Ok(InformationElement::UpdatePdr(UpdatePdr::parse(&mut value_buf)?)),
             IeType::UpdateFar => Ok(InformationElement::UpdateFar(UpdateFar::parse(&mut value_buf)?)),
             IeType::VolumeThreshold => Ok(InformationElement::VolumeThreshold(VolumeThreshold::parse(&mut value_buf)?)),
@@ -2185,6 +2401,11 @@ impl InformationElement {
                 buf.put_u16(IeType::CreateFar as u16);
                 buf.put_u16(create_far.len() as u16);
                 create_far.encode(buf);
+            }
+            InformationElement::CreateUrr(create_urr) => {
+                buf.put_u16(IeType::CreateUrr as u16);
+                buf.put_u16(create_urr.len() as u16);
+                create_urr.encode(buf);
             }
             InformationElement::UpdatePdr(update_pdr) => {
                 buf.put_u16(IeType::UpdatePdr as u16);
@@ -3959,5 +4180,157 @@ mod tests {
         let mut buf = Bytes::from(&[0u8, 1, 2][..]);
         let result = EndTime::parse(&mut buf);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_urr_basic() {
+        let urr_id = UrrId::new(URRID(1));
+        let measurement_method = MeasurementMethod::new(true, false, false);
+        let reporting_triggers = ReportingTriggers::new();
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers);
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_with_measurement_period() {
+        let urr_id = UrrId::new(URRID(2));
+        let measurement_method = MeasurementMethod::new(true, false, false);
+        let mut reporting_triggers = ReportingTriggers::new();
+        reporting_triggers.periodic_reporting = true;
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_measurement_period(MeasurementPeriod::new(60));
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_with_volume_threshold() {
+        let urr_id = UrrId::new(URRID(3));
+        let measurement_method = MeasurementMethod::new(false, true, false);
+        let mut reporting_triggers = ReportingTriggers::new();
+        reporting_triggers.volume_threshold = true;
+        let volume_threshold = VolumeThreshold::new(Some(1000000), Some(500000), Some(500000));
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_volume_threshold(volume_threshold);
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_with_time_threshold() {
+        let urr_id = UrrId::new(URRID(4));
+        let measurement_method = MeasurementMethod::new(true, false, false);
+        let mut reporting_triggers = ReportingTriggers::new();
+        reporting_triggers.time_threshold = true;
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_time_threshold(TimeThreshold::new(300));
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_with_quota_holding_time() {
+        let urr_id = UrrId::new(URRID(5));
+        let measurement_method = MeasurementMethod::new(true, true, false);
+        let mut reporting_triggers = ReportingTriggers::new();
+        reporting_triggers.quota_holding_time = true;
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_quota_holding_time(QuotaHoldingTime::new(120));
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_with_start_and_end_time() {
+        let urr_id = UrrId::new(URRID(6));
+        let measurement_method = MeasurementMethod::new(true, false, false);
+        let reporting_triggers = ReportingTriggers::new();
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_start_time(StartTime::new(3918645600))
+            .with_end_time(EndTime::new(3918649200));
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_complete() {
+        let urr_id = UrrId::new(URRID(10));
+        let measurement_method = MeasurementMethod::new(true, true, false);
+        let mut reporting_triggers = ReportingTriggers::new();
+        reporting_triggers.periodic_reporting = true;
+        reporting_triggers.volume_threshold = true;
+        reporting_triggers.time_threshold = true;
+        let volume_threshold = VolumeThreshold::new(Some(10000000), None, None);
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_measurement_period(MeasurementPeriod::new(300))
+            .with_volume_threshold(volume_threshold)
+            .with_time_threshold(TimeThreshold::new(600))
+            .with_quota_holding_time(QuotaHoldingTime::new(180))
+            .with_start_time(StartTime::new(3918645600))
+            .with_end_time(EndTime::new(3918732000));
+
+        let mut buf = BytesMut::new();
+        create_urr.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = CreateUrr::parse(&mut bytes).unwrap();
+
+        assert_eq!(create_urr, parsed);
+    }
+
+    #[test]
+    fn test_create_urr_ie_encoding() {
+        let urr_id = UrrId::new(URRID(7));
+        let measurement_method = MeasurementMethod::new(true, true, false);
+        let mut reporting_triggers = ReportingTriggers::new();
+        reporting_triggers.periodic_reporting = true;
+        let create_urr = CreateUrr::new(urr_id, measurement_method, reporting_triggers)
+            .with_measurement_period(MeasurementPeriod::new(120));
+        let ie = InformationElement::CreateUrr(create_urr);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
     }
 }
