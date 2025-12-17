@@ -385,13 +385,22 @@
 - Full test coverage for URR ID parsing, encoding, and edge cases
 - Foundation for Usage Reporting Rule support
 
+## 52. Measurement Method Information Element
+- Measurement Method Information Element (IE Type 62)
+- Flag-based structure for measurement types
+- Duration measurement flag (DURAT)
+- Volume measurement flag (VOLUM)
+- Event measurement flag (EVENT)
+- Parse and encode functions with proper bit flag handling
+- Integration with InformationElement enum
+- Full test coverage for all flag combinations
+- Foundation for URR measurement configuration
+
 # Not implemented Features
-## 1. URR (Usage Reporting Rule) Support
+## 1. URR (Usage Reporting Rule) Support - Breakdown
 **Purpose:** Advanced usage tracking, quota management, and event-based reporting
 
-### 1.1 URR Information Elements
-- URR ID Information Element (IE Type 81) (IMPLEMENTED - section 51)
-- Measurement Method Information Element (IE Type 62)
+### Individual Information Elements (Implement in order)
 - Reporting Triggers Information Element (IE Type 37)
 - Volume Threshold Information Element (IE Type 31)
 - Time Threshold Information Element (IE Type 32)
@@ -400,21 +409,19 @@
 - Start Time Information Element (IE Type 75)
 - End Time Information Element (IE Type 76)
 
-### 1.2 URR Grouped Information Elements
+### URR Grouped Information Elements
 - Create URR Information Element (IE Type 6)
 - Update URR Information Element (IE Type 13)
 - Remove URR Information Element (IE Type 16)
 - Usage Report Session Modification Response (IE Type 78)
 - Usage Report Session Report Request (IE Type 80)
 
-### 1.3 URR Data Structures
+### URR Data Structures and Logic
 - URR type definition with ID, measurement method, triggers, and thresholds
 - URR storage in Session structure
 - URR-specific usage statistics tracking
 - Volume quota management
 - Time quota management
-
-### 1.4 URR Measurement and Reporting
 - Volume-based measurement (uplink, downlink, total)
 - Time-based measurement (duration)
 - Event-based reporting triggers
@@ -423,7 +430,7 @@
 - Quota exhaustion detection
 - Usage Report generation in Session Report Request
 
-### 1.5 PFCP Session Report Procedure
+### PFCP Session Report Procedure
 - Session Report Request message generation
 - Session Report Response message parsing
 - Event-based report triggers (quota exhausted, threshold reached)

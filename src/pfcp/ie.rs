@@ -46,6 +46,7 @@ pub enum IeType {
     PdrId = 56,
     FSeid = 57,
     NodeId = 60,
+    MeasurementMethod = 62,
     VolumeMeasurement = 66,
     DurationMeasurement = 67,
     UsageReportSdr = 79,
@@ -73,6 +74,7 @@ impl IeType {
             56 => Ok(IeType::PdrId),
             57 => Ok(IeType::FSeid),
             60 => Ok(IeType::NodeId),
+            62 => Ok(IeType::MeasurementMethod),
             66 => Ok(IeType::VolumeMeasurement),
             67 => Ok(IeType::DurationMeasurement),
             79 => Ok(IeType::UsageReportSdr),
@@ -475,6 +477,57 @@ impl UrrId {
 
     pub fn len(&self) -> usize {
         4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeasurementMethod {
+    pub duration: bool,
+    pub volume: bool,
+    pub event: bool,
+}
+
+impl MeasurementMethod {
+    pub fn new(duration: bool, volume: bool, event: bool) -> Self {
+        MeasurementMethod {
+            duration,
+            volume,
+            event,
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+
+        let flags = buf.get_u8();
+        Ok(MeasurementMethod {
+            duration: (flags & 0x01) != 0,
+            volume: (flags & 0x02) != 0,
+            event: (flags & 0x04) != 0,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        let mut flags = 0u8;
+        if self.duration {
+            flags |= 0x01;
+        }
+        if self.volume {
+            flags |= 0x02;
+        }
+        if self.event {
+            flags |= 0x04;
+        }
+        buf.put_u8(flags);
+    }
+
+    pub fn len(&self) -> usize {
+        1
     }
 }
 
@@ -1442,6 +1495,7 @@ pub enum InformationElement {
     PdrId(PdrId),
     FarId(FarId),
     UrrId(UrrId),
+    MeasurementMethod(MeasurementMethod),
     NetworkInstance(NetworkInstance),
     Precedence(Precedence),
     SourceInterface(SourceInterface),
@@ -1492,6 +1546,7 @@ impl InformationElement {
             IeType::PdrId => Ok(InformationElement::PdrId(PdrId::parse(&mut value_buf)?)),
             IeType::FarId => Ok(InformationElement::FarId(FarId::parse(&mut value_buf)?)),
             IeType::UrrId => Ok(InformationElement::UrrId(UrrId::parse(&mut value_buf)?)),
+            IeType::MeasurementMethod => Ok(InformationElement::MeasurementMethod(MeasurementMethod::parse(&mut value_buf)?)),
             IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
                 NetworkInstance::parse(&mut value_buf)?,
             )),
@@ -1556,6 +1611,11 @@ impl InformationElement {
                 buf.put_u16(IeType::UrrId as u16);
                 buf.put_u16(urr_id.len() as u16);
                 urr_id.encode(buf);
+            }
+            InformationElement::MeasurementMethod(measurement_method) => {
+                buf.put_u16(IeType::MeasurementMethod as u16);
+                buf.put_u16(measurement_method.len() as u16);
+                measurement_method.encode(buf);
             }
             InformationElement::NetworkInstance(network_instance) => {
                 buf.put_u16(IeType::NetworkInstance as u16);
@@ -1995,6 +2055,100 @@ mod tests {
         let parsed = UrrId::parse(&mut bytes).unwrap();
 
         assert_eq!(urr_id, parsed);
+    }
+
+    #[test]
+    fn test_measurement_method_duration() {
+        let mm = MeasurementMethod::new(true, false, false);
+
+        let mut buf = BytesMut::new();
+        mm.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementMethod::parse(&mut bytes).unwrap();
+
+        assert_eq!(mm, parsed);
+        assert!(parsed.duration);
+        assert!(!parsed.volume);
+        assert!(!parsed.event);
+    }
+
+    #[test]
+    fn test_measurement_method_volume() {
+        let mm = MeasurementMethod::new(false, true, false);
+
+        let mut buf = BytesMut::new();
+        mm.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementMethod::parse(&mut bytes).unwrap();
+
+        assert_eq!(mm, parsed);
+        assert!(!parsed.duration);
+        assert!(parsed.volume);
+        assert!(!parsed.event);
+    }
+
+    #[test]
+    fn test_measurement_method_event() {
+        let mm = MeasurementMethod::new(false, false, true);
+
+        let mut buf = BytesMut::new();
+        mm.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementMethod::parse(&mut bytes).unwrap();
+
+        assert_eq!(mm, parsed);
+        assert!(!parsed.duration);
+        assert!(!parsed.volume);
+        assert!(parsed.event);
+    }
+
+    #[test]
+    fn test_measurement_method_all_flags() {
+        let mm = MeasurementMethod::new(true, true, true);
+
+        let mut buf = BytesMut::new();
+        mm.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementMethod::parse(&mut bytes).unwrap();
+
+        assert_eq!(mm, parsed);
+        assert!(parsed.duration);
+        assert!(parsed.volume);
+        assert!(parsed.event);
+    }
+
+    #[test]
+    fn test_measurement_method_no_flags() {
+        let mm = MeasurementMethod::new(false, false, false);
+
+        let mut buf = BytesMut::new();
+        mm.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = MeasurementMethod::parse(&mut bytes).unwrap();
+
+        assert_eq!(mm, parsed);
+        assert!(!parsed.duration);
+        assert!(!parsed.volume);
+        assert!(!parsed.event);
+    }
+
+    #[test]
+    fn test_measurement_method_ie_encoding() {
+        let mm = MeasurementMethod::new(true, true, false);
+        let ie = InformationElement::MeasurementMethod(mm);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
     }
 
     #[test]
