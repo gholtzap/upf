@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
-use crate::types::identifiers::{SEID, PDRID, FARID, QFI};
+use crate::types::identifiers::{SEID, PDRID, FARID, QFI, URRID};
 use crate::types::PduSessionType;
 
 #[derive(Debug, Error)]
@@ -49,6 +49,7 @@ pub enum IeType {
     VolumeMeasurement = 66,
     DurationMeasurement = 67,
     UsageReportSdr = 79,
+    UrrId = 81,
     UeIpAddress = 93,
     RecoveryTimeStamp = 96,
     FarId = 108,
@@ -75,6 +76,7 @@ impl IeType {
             66 => Ok(IeType::VolumeMeasurement),
             67 => Ok(IeType::DurationMeasurement),
             79 => Ok(IeType::UsageReportSdr),
+            81 => Ok(IeType::UrrId),
             93 => Ok(IeType::UeIpAddress),
             96 => Ok(IeType::RecoveryTimeStamp),
             108 => Ok(IeType::FarId),
@@ -438,6 +440,33 @@ impl FarId {
             });
         }
         Ok(FarId(FARID(buf.get_u32())))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UrrId(pub URRID);
+
+impl UrrId {
+    pub fn new(id: URRID) -> Self {
+        UrrId(id)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(UrrId(URRID(buf.get_u32())))
     }
 
     pub fn encode(&self, buf: &mut BytesMut) {
@@ -1412,6 +1441,7 @@ pub enum InformationElement {
     FSeid(FSeid),
     PdrId(PdrId),
     FarId(FarId),
+    UrrId(UrrId),
     NetworkInstance(NetworkInstance),
     Precedence(Precedence),
     SourceInterface(SourceInterface),
@@ -1461,6 +1491,7 @@ impl InformationElement {
             IeType::FSeid => Ok(InformationElement::FSeid(FSeid::parse(&mut value_buf)?)),
             IeType::PdrId => Ok(InformationElement::PdrId(PdrId::parse(&mut value_buf)?)),
             IeType::FarId => Ok(InformationElement::FarId(FarId::parse(&mut value_buf)?)),
+            IeType::UrrId => Ok(InformationElement::UrrId(UrrId::parse(&mut value_buf)?)),
             IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
                 NetworkInstance::parse(&mut value_buf)?,
             )),
@@ -1520,6 +1551,11 @@ impl InformationElement {
                 buf.put_u16(IeType::FarId as u16);
                 buf.put_u16(far_id.len() as u16);
                 far_id.encode(buf);
+            }
+            InformationElement::UrrId(urr_id) => {
+                buf.put_u16(IeType::UrrId as u16);
+                buf.put_u16(urr_id.len() as u16);
+                urr_id.encode(buf);
             }
             InformationElement::NetworkInstance(network_instance) => {
                 buf.put_u16(IeType::NetworkInstance as u16);
@@ -1919,6 +1955,46 @@ mod tests {
         let parsed = InformationElement::parse(&mut bytes).unwrap();
 
         assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_urr_id() {
+        let urr_id = UrrId::new(URRID(42));
+
+        let mut buf = BytesMut::new();
+        urr_id.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = UrrId::parse(&mut bytes).unwrap();
+
+        assert_eq!(urr_id, parsed);
+    }
+
+    #[test]
+    fn test_urr_id_ie_encoding() {
+        let urr_id = UrrId::new(URRID(5678));
+        let ie = InformationElement::UrrId(urr_id);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_urr_id_max_value() {
+        let urr_id = UrrId::new(URRID(u32::MAX));
+
+        let mut buf = BytesMut::new();
+        urr_id.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = UrrId::parse(&mut bytes).unwrap();
+
+        assert_eq!(urr_id, parsed);
     }
 
     #[test]

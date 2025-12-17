@@ -10,7 +10,7 @@ pub mod token_bucket;
 pub mod routing;
 pub mod pdu_session_type;
 
-pub use identifiers::{SEID, TEID, PDRID, FARID, QFI};
+pub use identifiers::{SEID, TEID, PDRID, FARID, QFI, URRID};
 pub use pdr::{PDR, PDI, PacketDirection, SourceInterface};
 pub use far::{FAR, ForwardingAction, ForwardingParameters, DestinationInterface};
 pub use session::{Session, SessionStats, SessionStatus};

@@ -377,22 +377,58 @@
 - Type-specific helper methods (is_ip_based)
 - Full test coverage for all PDU session types and edge cases
 
+## 51. URR ID Information Element
+- URR ID type definition (URRID) as u32 identifier
+- URR ID Information Element (IE Type 81)
+- Parse and encode functions with proper u32 encoding/decoding
+- Integration with InformationElement enum
+- Full test coverage for URR ID parsing, encoding, and edge cases
+- Foundation for Usage Reporting Rule support
+
 # Not implemented Features
-## 1. Core Protocol Support
+## 1. URR (Usage Reporting Rule) Support
+**Purpose:** Advanced usage tracking, quota management, and event-based reporting
 
-### 1.1 PFCP (N4 Interface - UPF to SMF)
-**Purpose:** Control plane communication with SMF
+### 1.1 URR Information Elements
+- URR ID Information Element (IE Type 81) (IMPLEMENTED - section 51)
+- Measurement Method Information Element (IE Type 62)
+- Reporting Triggers Information Element (IE Type 37)
+- Volume Threshold Information Element (IE Type 31)
+- Time Threshold Information Element (IE Type 32)
+- Quota Holding Time Information Element (IE Type 71)
+- Measurement Period Information Element (IE Type 64)
+- Start Time Information Element (IE Type 75)
+- End Time Information Element (IE Type 76)
 
-#### 1.1.6 Essential Information Elements
-- PDR (Packet Detection Rule) encoding/decoding (IMPLEMENTED - sections 23-26)
-- FAR (Forwarding Action Rule) encoding/decoding (IMPLEMENTED - section 25)
-- F-SEID (Session Endpoint Identifier) (IMPLEMENTED - section 14)
-- UE IP Address (IMPLEMENTED - section 15)
-- Network Instance (IMPLEMENTED - section 16)
-- QFI (QoS Flow Identifier) (IMPLEMENTED - section 49)
-- Apply Action (Forward/Drop/Buffer) (IMPLEMENTED - section 22)
+### 1.2 URR Grouped Information Elements
+- Create URR Information Element (IE Type 6)
+- Update URR Information Element (IE Type 13)
+- Remove URR Information Element (IE Type 16)
+- Usage Report Session Modification Response (IE Type 78)
+- Usage Report Session Report Request (IE Type 80)
 
-### 1.2 GTP-U Protocol Foundation
+### 1.3 URR Data Structures
+- URR type definition with ID, measurement method, triggers, and thresholds
+- URR storage in Session structure
+- URR-specific usage statistics tracking
+- Volume quota management
+- Time quota management
+
+### 1.4 URR Measurement and Reporting
+- Volume-based measurement (uplink, downlink, total)
+- Time-based measurement (duration)
+- Event-based reporting triggers
+- Periodic reporting implementation
+- Threshold-based reporting (volume and time)
+- Quota exhaustion detection
+- Usage Report generation in Session Report Request
+
+### 1.5 PFCP Session Report Procedure
+- Session Report Request message generation
+- Session Report Response message parsing
+- Event-based report triggers (quota exhausted, threshold reached)
+- Periodic report triggers
+- Integration with URR measurement logic
 
 ## 2. Packet Processing (Simplified)
 
