@@ -367,6 +367,16 @@
 - Integration with InformationElement enum
 - Full test coverage for all QFI values and edge cases
 
+## 50. PDU Session Type Support
+- PDU Session Type enumeration (IPv4, IPv6, IPv4v6, Ethernet, Unstructured)
+- PDU Session Type Information Element (IE Type 113)
+- Parse and encode functions with proper value validation
+- Integration with Session structure
+- Session establishment request parsing with PDU Session Type
+- Default PDU Session Type (IPv4) when not specified
+- Type-specific helper methods (is_ip_based)
+- Full test coverage for all PDU session types and edge cases
+
 # Not implemented Features
 ## 1. Core Protocol Support
 
@@ -441,9 +451,11 @@
 
 ### 5.2 PDU Session Types
 **Support:**
-- IPv4 sessions (most common)
-- IPv6 sessions (if needed)
-- Can ignore Ethernet and Unstructured initially
+- IPv4 sessions (IMPLEMENTED - section 50)
+- IPv6 sessions (IMPLEMENTED - section 50)
+- IPv4v6 sessions (IMPLEMENTED - section 50)
+- Ethernet sessions (IMPLEMENTED - section 50)
+- Unstructured sessions (IMPLEMENTED - section 50)
 
 ### 5.3 Minimal Statistics
 **Per session, track:**

@@ -2,6 +2,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use thiserror::Error;
 use crate::types::identifiers::{SEID, PDRID, FARID, QFI};
+use crate::types::PduSessionType;
 
 #[derive(Debug, Error)]
 pub enum IeError {
@@ -23,6 +24,8 @@ pub enum IeError {
     InvalidDestinationInterface(u8),
     #[error("Invalid QFI value: {0}")]
     InvalidQfi(u8),
+    #[error("Invalid PDU session type: {0}")]
+    InvalidPduSessionType(u8),
 }
 
 pub type IeResult<T> = Result<T, IeError>;
@@ -49,6 +52,7 @@ pub enum IeType {
     UeIpAddress = 93,
     RecoveryTimeStamp = 96,
     FarId = 108,
+    PduSessionType = 113,
     Qfi = 124,
 }
 
@@ -74,6 +78,7 @@ impl IeType {
             93 => Ok(IeType::UeIpAddress),
             96 => Ok(IeType::RecoveryTimeStamp),
             108 => Ok(IeType::FarId),
+            113 => Ok(IeType::PduSessionType),
             124 => Ok(IeType::Qfi),
             _ => Err(IeError::InvalidType(value)),
         }
@@ -495,6 +500,36 @@ impl QfiIe {
 
     pub fn encode(&self, buf: &mut BytesMut) {
         buf.put_u8(self.0.0 & 0x3F);
+    }
+
+    pub fn len(&self) -> usize {
+        1
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PduSessionTypeIe(pub PduSessionType);
+
+impl PduSessionTypeIe {
+    pub fn new(pdu_session_type: PduSessionType) -> Self {
+        PduSessionTypeIe(pdu_session_type)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+        let value = buf.get_u8() & 0x0F;
+        let pdu_type = PduSessionType::from_u8(value)
+            .ok_or(IeError::InvalidPduSessionType(value))?;
+        Ok(PduSessionTypeIe(pdu_type))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u8(self.0.to_u8());
     }
 
     pub fn len(&self) -> usize {
@@ -1390,6 +1425,7 @@ pub enum InformationElement {
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
+    PduSessionType(PduSessionTypeIe),
     Qfi(QfiIe),
 }
 
@@ -1448,6 +1484,7 @@ impl InformationElement {
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
+            IeType::PduSessionType => Ok(InformationElement::PduSessionType(PduSessionTypeIe::parse(&mut value_buf)?)),
             IeType::Qfi => Ok(InformationElement::Qfi(QfiIe::parse(&mut value_buf)?)),
         }
     }
@@ -1548,6 +1585,11 @@ impl InformationElement {
                 buf.put_u16(IeType::UsageReportSdr as u16);
                 buf.put_u16(usage_report.len() as u16);
                 usage_report.encode(buf);
+            }
+            InformationElement::PduSessionType(pdu_session_type) => {
+                buf.put_u16(IeType::PduSessionType as u16);
+                buf.put_u16(pdu_session_type.len() as u16);
+                pdu_session_type.encode(buf);
             }
             InformationElement::Qfi(qfi) => {
                 buf.put_u16(IeType::Qfi as u16);
@@ -2388,6 +2430,134 @@ mod tests {
 
             assert_eq!(qfi, parsed);
             assert_eq!(parsed.0.0, value);
+        }
+    }
+
+    #[test]
+    fn test_pdu_session_type_ipv4() {
+        let pst = PduSessionTypeIe::new(PduSessionType::IPv4);
+
+        let mut buf = BytesMut::new();
+        pst.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PduSessionTypeIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(pst, parsed);
+        assert_eq!(parsed.0, PduSessionType::IPv4);
+    }
+
+    #[test]
+    fn test_pdu_session_type_ipv6() {
+        let pst = PduSessionTypeIe::new(PduSessionType::IPv6);
+
+        let mut buf = BytesMut::new();
+        pst.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PduSessionTypeIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(pst, parsed);
+        assert_eq!(parsed.0, PduSessionType::IPv6);
+    }
+
+    #[test]
+    fn test_pdu_session_type_ipv4v6() {
+        let pst = PduSessionTypeIe::new(PduSessionType::IPv4v6);
+
+        let mut buf = BytesMut::new();
+        pst.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PduSessionTypeIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(pst, parsed);
+        assert_eq!(parsed.0, PduSessionType::IPv4v6);
+    }
+
+    #[test]
+    fn test_pdu_session_type_ethernet() {
+        let pst = PduSessionTypeIe::new(PduSessionType::Ethernet);
+
+        let mut buf = BytesMut::new();
+        pst.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PduSessionTypeIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(pst, parsed);
+        assert_eq!(parsed.0, PduSessionType::Ethernet);
+    }
+
+    #[test]
+    fn test_pdu_session_type_unstructured() {
+        let pst = PduSessionTypeIe::new(PduSessionType::Unstructured);
+
+        let mut buf = BytesMut::new();
+        pst.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = PduSessionTypeIe::parse(&mut bytes).unwrap();
+
+        assert_eq!(pst, parsed);
+        assert_eq!(parsed.0, PduSessionType::Unstructured);
+    }
+
+    #[test]
+    fn test_pdu_session_type_invalid() {
+        let mut buf = BytesMut::new();
+        buf.put_u8(0);
+
+        let mut bytes = buf.freeze();
+        let result = PduSessionTypeIe::parse(&mut bytes);
+        assert!(result.is_err());
+
+        let mut buf = BytesMut::new();
+        buf.put_u8(6);
+
+        let mut bytes = buf.freeze();
+        let result = PduSessionTypeIe::parse(&mut bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_pdu_session_type_ie_encoding() {
+        let pst = PduSessionTypeIe::new(PduSessionType::IPv4);
+        let ie = InformationElement::PduSessionType(pst);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_pdu_session_type_all_values() {
+        let test_values = vec![
+            (PduSessionType::IPv4, 1),
+            (PduSessionType::IPv6, 2),
+            (PduSessionType::IPv4v6, 3),
+            (PduSessionType::Ethernet, 4),
+            (PduSessionType::Unstructured, 5),
+        ];
+
+        for (pdu_type, expected_value) in test_values {
+            let pst = PduSessionTypeIe::new(pdu_type);
+
+            let mut buf = BytesMut::new();
+            pst.encode(&mut buf);
+
+            assert_eq!(buf.len(), 1);
+            assert_eq!(buf[0], expected_value);
+
+            let mut bytes = buf.freeze();
+            let parsed = PduSessionTypeIe::parse(&mut bytes).unwrap();
+
+            assert_eq!(pst, parsed);
+            assert_eq!(parsed.0, pdu_type);
         }
     }
 }

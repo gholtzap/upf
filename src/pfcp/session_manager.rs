@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::types::session::Session;
 use crate::types::identifiers::{SEID, TEID, QFI};
 use crate::types::qos::{QosProfileManager, QosProfile, PriorityLevel};
+use crate::types::PduSessionType;
 
 #[derive(Debug, Clone)]
 pub struct SessionManager {
@@ -113,6 +114,7 @@ mod tests {
             stats: SessionStats::default(),
             status: SessionStatus::Active,
             default_qfi: QFI(9),
+            pdu_session_type: PduSessionType::default(),
             uplink_token_bucket: None,
             downlink_token_bucket: None,
         };
@@ -145,6 +147,7 @@ mod tests {
             stats: SessionStats::default(),
             status: SessionStatus::Active,
             default_qfi: QFI(9),
+            pdu_session_type: PduSessionType::default(),
             uplink_token_bucket: None,
             downlink_token_bucket: None,
         };

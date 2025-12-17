@@ -411,6 +411,10 @@ impl PfcpServer {
             }
         }).collect();
 
+        let pdu_session_type = req.pdu_session_type
+            .map(|pst| pst.0)
+            .unwrap_or_default();
+
         let session = Session {
             seid: req.fseid.seid,
             ue_ip,
@@ -421,6 +425,7 @@ impl PfcpServer {
             stats: SessionStats::default(),
             status: SessionStatus::Active,
             default_qfi: QFI(9),
+            pdu_session_type,
             uplink_token_bucket: None,
             downlink_token_bucket: None,
         };

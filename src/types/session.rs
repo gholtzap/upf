@@ -2,6 +2,7 @@ use crate::types::far::FAR;
 use crate::types::identifiers::{QFI, SEID, TEID};
 use crate::types::pdr::PDR;
 use crate::types::token_bucket::TokenBucket;
+use crate::types::PduSessionType;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::time::SystemTime;
@@ -44,6 +45,7 @@ pub struct Session {
     pub stats: SessionStats,
     pub status: SessionStatus,
     pub default_qfi: QFI,
+    pub pdu_session_type: PduSessionType,
     #[serde(skip)]
     pub uplink_token_bucket: Option<TokenBucket>,
     #[serde(skip)]

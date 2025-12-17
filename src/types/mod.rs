@@ -8,6 +8,7 @@ pub mod qos;
 pub mod priority_queue;
 pub mod token_bucket;
 pub mod routing;
+pub mod pdu_session_type;
 
 pub use identifiers::{SEID, TEID, PDRID, FARID, QFI};
 pub use pdr::{PDR, PDI, PacketDirection, SourceInterface};
@@ -19,3 +20,4 @@ pub use qos::{QosProfile, QosProfileManager, PriorityLevel};
 pub use priority_queue::{PriorityQueue, QueuedPacket, QueueError};
 pub use token_bucket::{TokenBucket, TokenBucketConfig};
 pub use routing::{Route, RoutingTable, IpNetwork, ArpCache, ArpEntry};
+pub use pdu_session_type::PduSessionType;

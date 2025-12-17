@@ -199,6 +199,7 @@ pub struct SessionEstablishmentRequest {
     pub fseid: FSeid,
     pub create_pdrs: Vec<CreatePdr>,
     pub create_fars: Vec<CreateFar>,
+    pub pdu_session_type: Option<crate::pfcp::ie::PduSessionTypeIe>,
 }
 
 impl SessionEstablishmentRequest {
@@ -209,6 +210,7 @@ impl SessionEstablishmentRequest {
         let mut fseid = None;
         let mut create_pdrs = Vec::new();
         let mut create_fars = Vec::new();
+        let mut pdu_session_type = None;
 
         for ie in ies {
             match ie {
@@ -216,6 +218,7 @@ impl SessionEstablishmentRequest {
                 InformationElement::FSeid(f) => fseid = Some(f),
                 InformationElement::CreatePdr(pdr) => create_pdrs.push(pdr),
                 InformationElement::CreateFar(far) => create_fars.push(far),
+                InformationElement::PduSessionType(pst) => pdu_session_type = Some(pst),
                 _ => {}
             }
         }
@@ -232,6 +235,7 @@ impl SessionEstablishmentRequest {
             fseid,
             create_pdrs,
             create_fars,
+            pdu_session_type,
         })
     }
 
@@ -241,6 +245,10 @@ impl SessionEstablishmentRequest {
             InformationElement::NodeId(self.node_id.clone()),
             InformationElement::FSeid(self.fseid.clone()),
         ];
+
+        if let Some(pdu_session_type) = self.pdu_session_type {
+            ies.push(InformationElement::PduSessionType(pdu_session_type));
+        }
 
         for pdr in &self.create_pdrs {
             ies.push(InformationElement::CreatePdr(pdr.clone()));
@@ -516,6 +524,7 @@ mod tests {
             fseid: fseid.clone(),
             create_pdrs: vec![create_pdr],
             create_fars: vec![create_far],
+            pdu_session_type: None,
         };
 
         let encoded = req.encode();
