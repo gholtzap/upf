@@ -429,12 +429,20 @@
 - Full test coverage for all values and edge cases
 - Foundation for URR time-based reporting triggers
 
+## 56. Quota Holding Time Information Element
+- Quota Holding Time Information Element (IE Type 71)
+- IE type and structure definition
+- Quota holding time value encoding/decoding (u32, in seconds)
+- Parse and encode functions
+- Integration with InformationElement enum
+- Full test coverage for all values and edge cases
+- Foundation for URR quota management
+
 # Not implemented Features
 ## 1. URR (Usage Reporting Rule) Support - Breakdown
 **Purpose:** Advanced usage tracking, quota management, and event-based reporting
 
 ### Individual Information Elements (Implement in order)
-- Quota Holding Time Information Element (IE Type 71)
 - Measurement Period Information Element (IE Type 64)
 - Start Time Information Element (IE Type 75)
 - End Time Information Element (IE Type 76)

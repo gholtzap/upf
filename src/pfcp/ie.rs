@@ -52,6 +52,7 @@ pub enum IeType {
     MeasurementMethod = 62,
     VolumeMeasurement = 66,
     DurationMeasurement = 67,
+    QuotaHoldingTime = 71,
     UsageReportSdr = 79,
     UrrId = 81,
     UeIpAddress = 93,
@@ -83,6 +84,7 @@ impl IeType {
             62 => Ok(IeType::MeasurementMethod),
             66 => Ok(IeType::VolumeMeasurement),
             67 => Ok(IeType::DurationMeasurement),
+            71 => Ok(IeType::QuotaHoldingTime),
             79 => Ok(IeType::UsageReportSdr),
             81 => Ok(IeType::UrrId),
             93 => Ok(IeType::UeIpAddress),
@@ -822,6 +824,33 @@ impl TimeThreshold {
             });
         }
         Ok(TimeThreshold(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuotaHoldingTime(pub u32);
+
+impl QuotaHoldingTime {
+    pub fn new(value: u32) -> Self {
+        QuotaHoldingTime(value)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(QuotaHoldingTime(buf.get_u32()))
     }
 
     pub fn encode(&self, buf: &mut BytesMut) {
@@ -1898,6 +1927,7 @@ pub enum InformationElement {
     UpdateFar(UpdateFar),
     VolumeThreshold(VolumeThreshold),
     TimeThreshold(TimeThreshold),
+    QuotaHoldingTime(QuotaHoldingTime),
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
@@ -1962,6 +1992,7 @@ impl InformationElement {
             IeType::UpdateFar => Ok(InformationElement::UpdateFar(UpdateFar::parse(&mut value_buf)?)),
             IeType::VolumeThreshold => Ok(InformationElement::VolumeThreshold(VolumeThreshold::parse(&mut value_buf)?)),
             IeType::TimeThreshold => Ok(InformationElement::TimeThreshold(TimeThreshold::parse(&mut value_buf)?)),
+            IeType::QuotaHoldingTime => Ok(InformationElement::QuotaHoldingTime(QuotaHoldingTime::parse(&mut value_buf)?)),
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
@@ -2076,6 +2107,11 @@ impl InformationElement {
                 buf.put_u16(IeType::TimeThreshold as u16);
                 buf.put_u16(threshold.len() as u16);
                 threshold.encode(buf);
+            }
+            InformationElement::QuotaHoldingTime(quota_holding_time) => {
+                buf.put_u16(IeType::QuotaHoldingTime as u16);
+                buf.put_u16(quota_holding_time.len() as u16);
+                quota_holding_time.encode(buf);
             }
             InformationElement::VolumeMeasurement(volume) => {
                 buf.put_u16(IeType::VolumeMeasurement as u16);
@@ -3538,6 +3574,75 @@ mod tests {
     fn test_time_threshold_buffer_too_short() {
         let mut buf = Bytes::from(&[0u8, 1, 2][..]);
         let result = TimeThreshold::parse(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_quota_holding_time_basic() {
+        let quota_holding_time = QuotaHoldingTime::new(3600);
+
+        let mut buf = BytesMut::new();
+        quota_holding_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = QuotaHoldingTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(quota_holding_time, parsed);
+        assert_eq!(parsed.0, 3600);
+    }
+
+    #[test]
+    fn test_quota_holding_time_zero() {
+        let quota_holding_time = QuotaHoldingTime::new(0);
+
+        let mut buf = BytesMut::new();
+        quota_holding_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = QuotaHoldingTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(quota_holding_time, parsed);
+        assert_eq!(parsed.0, 0);
+    }
+
+    #[test]
+    fn test_quota_holding_time_max_value() {
+        let quota_holding_time = QuotaHoldingTime::new(u32::MAX);
+
+        let mut buf = BytesMut::new();
+        quota_holding_time.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = QuotaHoldingTime::parse(&mut bytes).unwrap();
+
+        assert_eq!(quota_holding_time, parsed);
+        assert_eq!(parsed.0, u32::MAX);
+    }
+
+    #[test]
+    fn test_quota_holding_time_ie_encoding() {
+        let quota_holding_time = QuotaHoldingTime::new(7200);
+        let ie = InformationElement::QuotaHoldingTime(quota_holding_time);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_quota_holding_time_buffer_too_short() {
+        let mut buf = Bytes::from(&[0u8, 1, 2][..]);
+        let result = QuotaHoldingTime::parse(&mut buf);
         assert!(result.is_err());
     }
 }
