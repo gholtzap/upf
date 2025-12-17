@@ -420,12 +420,20 @@
 - Full test coverage for all flag combinations and edge cases
 - Foundation for URR volume-based reporting triggers
 
+## 55. Time Threshold Information Element
+- Time Threshold Information Element (IE Type 32)
+- IE type and structure definition
+- Time threshold value encoding/decoding (u32, in seconds)
+- Parse and encode functions
+- Integration with InformationElement enum
+- Full test coverage for all values and edge cases
+- Foundation for URR time-based reporting triggers
+
 # Not implemented Features
 ## 1. URR (Usage Reporting Rule) Support - Breakdown
 **Purpose:** Advanced usage tracking, quota management, and event-based reporting
 
 ### Individual Information Elements (Implement in order)
-- Time Threshold Information Element (IE Type 32)
 - Quota Holding Time Information Element (IE Type 71)
 - Measurement Period Information Element (IE Type 64)
 - Start Time Information Element (IE Type 75)

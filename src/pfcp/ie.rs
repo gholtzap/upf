@@ -42,6 +42,7 @@ pub enum IeType {
     NetworkInstance = 22,
     Precedence = 29,
     VolumeThreshold = 31,
+    TimeThreshold = 32,
     ReportingTriggers = 37,
     DestinationInterface = 42,
     ApplyAction = 44,
@@ -72,6 +73,7 @@ impl IeType {
             22 => Ok(IeType::NetworkInstance),
             29 => Ok(IeType::Precedence),
             31 => Ok(IeType::VolumeThreshold),
+            32 => Ok(IeType::TimeThreshold),
             37 => Ok(IeType::ReportingTriggers),
             42 => Ok(IeType::DestinationInterface),
             44 => Ok(IeType::ApplyAction),
@@ -793,6 +795,33 @@ impl Precedence {
             });
         }
         Ok(Precedence(buf.get_u32()))
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        buf.put_u32(self.0);
+    }
+
+    pub fn len(&self) -> usize {
+        4
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimeThreshold(pub u32);
+
+impl TimeThreshold {
+    pub fn new(value: u32) -> Self {
+        TimeThreshold(value)
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 4 {
+            return Err(IeError::BufferTooShort {
+                needed: 4,
+                available: buf.remaining(),
+            });
+        }
+        Ok(TimeThreshold(buf.get_u32()))
     }
 
     pub fn encode(&self, buf: &mut BytesMut) {
@@ -1868,6 +1897,7 @@ pub enum InformationElement {
     UpdatePdr(UpdatePdr),
     UpdateFar(UpdateFar),
     VolumeThreshold(VolumeThreshold),
+    TimeThreshold(TimeThreshold),
     VolumeMeasurement(VolumeMeasurement),
     DurationMeasurement(DurationMeasurement),
     UsageReportSdr(UsageReportSdr),
@@ -1931,6 +1961,7 @@ impl InformationElement {
             IeType::UpdatePdr => Ok(InformationElement::UpdatePdr(UpdatePdr::parse(&mut value_buf)?)),
             IeType::UpdateFar => Ok(InformationElement::UpdateFar(UpdateFar::parse(&mut value_buf)?)),
             IeType::VolumeThreshold => Ok(InformationElement::VolumeThreshold(VolumeThreshold::parse(&mut value_buf)?)),
+            IeType::TimeThreshold => Ok(InformationElement::TimeThreshold(TimeThreshold::parse(&mut value_buf)?)),
             IeType::VolumeMeasurement => Ok(InformationElement::VolumeMeasurement(VolumeMeasurement::parse(&mut value_buf)?)),
             IeType::DurationMeasurement => Ok(InformationElement::DurationMeasurement(DurationMeasurement::parse(&mut value_buf)?)),
             IeType::UsageReportSdr => Ok(InformationElement::UsageReportSdr(UsageReportSdr::parse(&mut value_buf)?)),
@@ -2038,6 +2069,11 @@ impl InformationElement {
             }
             InformationElement::VolumeThreshold(threshold) => {
                 buf.put_u16(IeType::VolumeThreshold as u16);
+                buf.put_u16(threshold.len() as u16);
+                threshold.encode(buf);
+            }
+            InformationElement::TimeThreshold(threshold) => {
+                buf.put_u16(IeType::TimeThreshold as u16);
                 buf.put_u16(threshold.len() as u16);
                 threshold.encode(buf);
             }
@@ -3434,5 +3470,74 @@ mod tests {
         assert_eq!(parsed.total_volume, Some(u64::MAX));
         assert_eq!(parsed.uplink_volume, Some(u64::MAX - 1));
         assert_eq!(parsed.downlink_volume, Some(u64::MAX - 2));
+    }
+
+    #[test]
+    fn test_time_threshold_basic() {
+        let threshold = TimeThreshold::new(3600);
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = TimeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.0, 3600);
+    }
+
+    #[test]
+    fn test_time_threshold_zero() {
+        let threshold = TimeThreshold::new(0);
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = TimeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.0, 0);
+    }
+
+    #[test]
+    fn test_time_threshold_max_value() {
+        let threshold = TimeThreshold::new(u32::MAX);
+
+        let mut buf = BytesMut::new();
+        threshold.encode(&mut buf);
+
+        assert_eq!(buf.len(), 4);
+
+        let mut bytes = buf.freeze();
+        let parsed = TimeThreshold::parse(&mut bytes).unwrap();
+
+        assert_eq!(threshold, parsed);
+        assert_eq!(parsed.0, u32::MAX);
+    }
+
+    #[test]
+    fn test_time_threshold_ie_encoding() {
+        let threshold = TimeThreshold::new(7200);
+        let ie = InformationElement::TimeThreshold(threshold);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_time_threshold_buffer_too_short() {
+        let mut buf = Bytes::from(&[0u8, 1, 2][..]);
+        let result = TimeThreshold::parse(&mut buf);
+        assert!(result.is_err());
     }
 }
