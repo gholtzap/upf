@@ -41,6 +41,7 @@ pub enum IeType {
     SourceInterface = 20,
     NetworkInstance = 22,
     Precedence = 29,
+    ReportingTriggers = 37,
     DestinationInterface = 42,
     ApplyAction = 44,
     PdrId = 56,
@@ -69,6 +70,7 @@ impl IeType {
             20 => Ok(IeType::SourceInterface),
             22 => Ok(IeType::NetworkInstance),
             29 => Ok(IeType::Precedence),
+            37 => Ok(IeType::ReportingTriggers),
             42 => Ok(IeType::DestinationInterface),
             44 => Ok(IeType::ApplyAction),
             56 => Ok(IeType::PdrId),
@@ -528,6 +530,248 @@ impl MeasurementMethod {
 
     pub fn len(&self) -> usize {
         1
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReportingTriggers {
+    pub periodic_reporting: bool,
+    pub volume_threshold: bool,
+    pub time_threshold: bool,
+    pub quota_holding_time: bool,
+    pub start_of_traffic: bool,
+    pub stop_of_traffic: bool,
+    pub dropped_dl_traffic_threshold: bool,
+    pub immediate_report: bool,
+    pub volume_quota: bool,
+    pub time_quota: bool,
+    pub linked_usage_reporting: bool,
+    pub termination_report: bool,
+    pub monitoring_time: bool,
+    pub event_threshold: bool,
+    pub event_quota: bool,
+    pub termination_by_up_function_report: bool,
+    pub ip_multicast_join_leave: bool,
+    pub quota_validity_time: bool,
+    pub event_based_usage_report_when_immediate: bool,
+}
+
+impl ReportingTriggers {
+    pub fn new() -> Self {
+        ReportingTriggers {
+            periodic_reporting: false,
+            volume_threshold: false,
+            time_threshold: false,
+            quota_holding_time: false,
+            start_of_traffic: false,
+            stop_of_traffic: false,
+            dropped_dl_traffic_threshold: false,
+            immediate_report: false,
+            volume_quota: false,
+            time_quota: false,
+            linked_usage_reporting: false,
+            termination_report: false,
+            monitoring_time: false,
+            event_threshold: false,
+            event_quota: false,
+            termination_by_up_function_report: false,
+            ip_multicast_join_leave: false,
+            quota_validity_time: false,
+            event_based_usage_report_when_immediate: false,
+        }
+    }
+
+    pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
+        if buf.remaining() < 1 {
+            return Err(IeError::BufferTooShort {
+                needed: 1,
+                available: buf.remaining(),
+            });
+        }
+
+        let octet5 = buf.get_u8();
+        let periodic_reporting = (octet5 & 0x01) != 0;
+        let volume_threshold = (octet5 & 0x02) != 0;
+        let time_threshold = (octet5 & 0x04) != 0;
+        let quota_holding_time = (octet5 & 0x08) != 0;
+        let start_of_traffic = (octet5 & 0x10) != 0;
+        let stop_of_traffic = (octet5 & 0x20) != 0;
+        let dropped_dl_traffic_threshold = (octet5 & 0x40) != 0;
+        let immediate_report = (octet5 & 0x80) != 0;
+
+        let (volume_quota, time_quota, linked_usage_reporting, termination_report,
+             monitoring_time, event_threshold, event_quota, termination_by_up_function_report) =
+            if buf.remaining() >= 1 {
+                let octet6 = buf.get_u8();
+                (
+                    (octet6 & 0x01) != 0,
+                    (octet6 & 0x02) != 0,
+                    (octet6 & 0x04) != 0,
+                    (octet6 & 0x08) != 0,
+                    (octet6 & 0x10) != 0,
+                    (octet6 & 0x20) != 0,
+                    (octet6 & 0x40) != 0,
+                    (octet6 & 0x80) != 0,
+                )
+            } else {
+                (false, false, false, false, false, false, false, false)
+            };
+
+        let (ip_multicast_join_leave, quota_validity_time, event_based_usage_report_when_immediate) =
+            if buf.remaining() >= 1 {
+                let octet7 = buf.get_u8();
+                (
+                    (octet7 & 0x01) != 0,
+                    (octet7 & 0x02) != 0,
+                    (octet7 & 0x04) != 0,
+                )
+            } else {
+                (false, false, false)
+            };
+
+        Ok(ReportingTriggers {
+            periodic_reporting,
+            volume_threshold,
+            time_threshold,
+            quota_holding_time,
+            start_of_traffic,
+            stop_of_traffic,
+            dropped_dl_traffic_threshold,
+            immediate_report,
+            volume_quota,
+            time_quota,
+            linked_usage_reporting,
+            termination_report,
+            monitoring_time,
+            event_threshold,
+            event_quota,
+            termination_by_up_function_report,
+            ip_multicast_join_leave,
+            quota_validity_time,
+            event_based_usage_report_when_immediate,
+        })
+    }
+
+    pub fn encode(&self, buf: &mut BytesMut) {
+        let mut octet5 = 0u8;
+        if self.periodic_reporting {
+            octet5 |= 0x01;
+        }
+        if self.volume_threshold {
+            octet5 |= 0x02;
+        }
+        if self.time_threshold {
+            octet5 |= 0x04;
+        }
+        if self.quota_holding_time {
+            octet5 |= 0x08;
+        }
+        if self.start_of_traffic {
+            octet5 |= 0x10;
+        }
+        if self.stop_of_traffic {
+            octet5 |= 0x20;
+        }
+        if self.dropped_dl_traffic_threshold {
+            octet5 |= 0x40;
+        }
+        if self.immediate_report {
+            octet5 |= 0x80;
+        }
+
+        let mut octet6 = 0u8;
+        if self.volume_quota {
+            octet6 |= 0x01;
+        }
+        if self.time_quota {
+            octet6 |= 0x02;
+        }
+        if self.linked_usage_reporting {
+            octet6 |= 0x04;
+        }
+        if self.termination_report {
+            octet6 |= 0x08;
+        }
+        if self.monitoring_time {
+            octet6 |= 0x10;
+        }
+        if self.event_threshold {
+            octet6 |= 0x20;
+        }
+        if self.event_quota {
+            octet6 |= 0x40;
+        }
+        if self.termination_by_up_function_report {
+            octet6 |= 0x80;
+        }
+
+        let mut octet7 = 0u8;
+        if self.ip_multicast_join_leave {
+            octet7 |= 0x01;
+        }
+        if self.quota_validity_time {
+            octet7 |= 0x02;
+        }
+        if self.event_based_usage_report_when_immediate {
+            octet7 |= 0x04;
+        }
+
+        buf.put_u8(octet5);
+
+        if octet6 != 0 || octet7 != 0 {
+            buf.put_u8(octet6);
+        }
+
+        if octet7 != 0 {
+            buf.put_u8(octet7);
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut octet6 = 0u8;
+        if self.volume_quota {
+            octet6 |= 0x01;
+        }
+        if self.time_quota {
+            octet6 |= 0x02;
+        }
+        if self.linked_usage_reporting {
+            octet6 |= 0x04;
+        }
+        if self.termination_report {
+            octet6 |= 0x08;
+        }
+        if self.monitoring_time {
+            octet6 |= 0x10;
+        }
+        if self.event_threshold {
+            octet6 |= 0x20;
+        }
+        if self.event_quota {
+            octet6 |= 0x40;
+        }
+        if self.termination_by_up_function_report {
+            octet6 |= 0x80;
+        }
+
+        let mut octet7 = 0u8;
+        if self.ip_multicast_join_leave {
+            octet7 |= 0x01;
+        }
+        if self.quota_validity_time {
+            octet7 |= 0x02;
+        }
+        if self.event_based_usage_report_when_immediate {
+            octet7 |= 0x04;
+        }
+
+        if octet7 != 0 {
+            3
+        } else if octet6 != 0 {
+            2
+        } else {
+            1
+        }
     }
 }
 
@@ -1496,6 +1740,7 @@ pub enum InformationElement {
     FarId(FarId),
     UrrId(UrrId),
     MeasurementMethod(MeasurementMethod),
+    ReportingTriggers(ReportingTriggers),
     NetworkInstance(NetworkInstance),
     Precedence(Precedence),
     SourceInterface(SourceInterface),
@@ -1547,6 +1792,7 @@ impl InformationElement {
             IeType::FarId => Ok(InformationElement::FarId(FarId::parse(&mut value_buf)?)),
             IeType::UrrId => Ok(InformationElement::UrrId(UrrId::parse(&mut value_buf)?)),
             IeType::MeasurementMethod => Ok(InformationElement::MeasurementMethod(MeasurementMethod::parse(&mut value_buf)?)),
+            IeType::ReportingTriggers => Ok(InformationElement::ReportingTriggers(ReportingTriggers::parse(&mut value_buf)?)),
             IeType::NetworkInstance => Ok(InformationElement::NetworkInstance(
                 NetworkInstance::parse(&mut value_buf)?,
             )),
@@ -1616,6 +1862,11 @@ impl InformationElement {
                 buf.put_u16(IeType::MeasurementMethod as u16);
                 buf.put_u16(measurement_method.len() as u16);
                 measurement_method.encode(buf);
+            }
+            InformationElement::ReportingTriggers(reporting_triggers) => {
+                buf.put_u16(IeType::ReportingTriggers as u16);
+                buf.put_u16(reporting_triggers.len() as u16);
+                reporting_triggers.encode(buf);
             }
             InformationElement::NetworkInstance(network_instance) => {
                 buf.put_u16(IeType::NetworkInstance as u16);
@@ -2141,6 +2392,160 @@ mod tests {
     fn test_measurement_method_ie_encoding() {
         let mm = MeasurementMethod::new(true, true, false);
         let ie = InformationElement::MeasurementMethod(mm);
+
+        let mut buf = BytesMut::new();
+        ie.encode(&mut buf);
+
+        let mut bytes = buf.freeze();
+        let parsed = InformationElement::parse(&mut bytes).unwrap();
+
+        assert_eq!(ie, parsed);
+    }
+
+    #[test]
+    fn test_reporting_triggers_octet5_only() {
+        let mut rt = ReportingTriggers::new();
+        rt.periodic_reporting = true;
+        rt.volume_threshold = true;
+
+        let mut buf = BytesMut::new();
+        rt.encode(&mut buf);
+
+        assert_eq!(rt.len(), 1);
+
+        let mut bytes = buf.freeze();
+        let parsed = ReportingTriggers::parse(&mut bytes).unwrap();
+
+        assert_eq!(rt, parsed);
+        assert!(parsed.periodic_reporting);
+        assert!(parsed.volume_threshold);
+        assert!(!parsed.time_threshold);
+        assert!(!parsed.volume_quota);
+    }
+
+    #[test]
+    fn test_reporting_triggers_two_octets() {
+        let mut rt = ReportingTriggers::new();
+        rt.periodic_reporting = true;
+        rt.volume_quota = true;
+        rt.time_quota = true;
+
+        let mut buf = BytesMut::new();
+        rt.encode(&mut buf);
+
+        assert_eq!(rt.len(), 2);
+
+        let mut bytes = buf.freeze();
+        let parsed = ReportingTriggers::parse(&mut bytes).unwrap();
+
+        assert_eq!(rt, parsed);
+        assert!(parsed.periodic_reporting);
+        assert!(parsed.volume_quota);
+        assert!(parsed.time_quota);
+        assert!(!parsed.linked_usage_reporting);
+    }
+
+    #[test]
+    fn test_reporting_triggers_three_octets() {
+        let mut rt = ReportingTriggers::new();
+        rt.immediate_report = true;
+        rt.termination_report = true;
+        rt.quota_validity_time = true;
+
+        let mut buf = BytesMut::new();
+        rt.encode(&mut buf);
+
+        assert_eq!(rt.len(), 3);
+
+        let mut bytes = buf.freeze();
+        let parsed = ReportingTriggers::parse(&mut bytes).unwrap();
+
+        assert_eq!(rt, parsed);
+        assert!(parsed.immediate_report);
+        assert!(parsed.termination_report);
+        assert!(parsed.quota_validity_time);
+        assert!(!parsed.periodic_reporting);
+    }
+
+    #[test]
+    fn test_reporting_triggers_all_flags() {
+        let mut rt = ReportingTriggers::new();
+        rt.periodic_reporting = true;
+        rt.volume_threshold = true;
+        rt.time_threshold = true;
+        rt.quota_holding_time = true;
+        rt.start_of_traffic = true;
+        rt.stop_of_traffic = true;
+        rt.dropped_dl_traffic_threshold = true;
+        rt.immediate_report = true;
+        rt.volume_quota = true;
+        rt.time_quota = true;
+        rt.linked_usage_reporting = true;
+        rt.termination_report = true;
+        rt.monitoring_time = true;
+        rt.event_threshold = true;
+        rt.event_quota = true;
+        rt.termination_by_up_function_report = true;
+        rt.ip_multicast_join_leave = true;
+        rt.quota_validity_time = true;
+        rt.event_based_usage_report_when_immediate = true;
+
+        let mut buf = BytesMut::new();
+        rt.encode(&mut buf);
+
+        assert_eq!(rt.len(), 3);
+
+        let mut bytes = buf.freeze();
+        let parsed = ReportingTriggers::parse(&mut bytes).unwrap();
+
+        assert_eq!(rt, parsed);
+        assert!(parsed.periodic_reporting);
+        assert!(parsed.volume_threshold);
+        assert!(parsed.time_threshold);
+        assert!(parsed.quota_holding_time);
+        assert!(parsed.start_of_traffic);
+        assert!(parsed.stop_of_traffic);
+        assert!(parsed.dropped_dl_traffic_threshold);
+        assert!(parsed.immediate_report);
+        assert!(parsed.volume_quota);
+        assert!(parsed.time_quota);
+        assert!(parsed.linked_usage_reporting);
+        assert!(parsed.termination_report);
+        assert!(parsed.monitoring_time);
+        assert!(parsed.event_threshold);
+        assert!(parsed.event_quota);
+        assert!(parsed.termination_by_up_function_report);
+        assert!(parsed.ip_multicast_join_leave);
+        assert!(parsed.quota_validity_time);
+        assert!(parsed.event_based_usage_report_when_immediate);
+    }
+
+    #[test]
+    fn test_reporting_triggers_no_flags() {
+        let rt = ReportingTriggers::new();
+
+        let mut buf = BytesMut::new();
+        rt.encode(&mut buf);
+
+        assert_eq!(rt.len(), 1);
+
+        let mut bytes = buf.freeze();
+        let parsed = ReportingTriggers::parse(&mut bytes).unwrap();
+
+        assert_eq!(rt, parsed);
+        assert!(!parsed.periodic_reporting);
+        assert!(!parsed.volume_threshold);
+        assert!(!parsed.time_threshold);
+    }
+
+    #[test]
+    fn test_reporting_triggers_ie_encoding() {
+        let mut rt = ReportingTriggers::new();
+        rt.periodic_reporting = true;
+        rt.volume_quota = true;
+        rt.termination_report = true;
+
+        let ie = InformationElement::ReportingTriggers(rt);
 
         let mut buf = BytesMut::new();
         ie.encode(&mut buf);
