@@ -115,6 +115,16 @@ pub enum NodeId {
 }
 
 impl NodeId {
+    pub fn from_string(s: &str) -> Self {
+        if let Ok(ipv4) = s.parse::<Ipv4Addr>() {
+            NodeId::Ipv4(ipv4)
+        } else if let Ok(ipv6) = s.parse::<Ipv6Addr>() {
+            NodeId::Ipv6(ipv6)
+        } else {
+            NodeId::Fqdn(s.to_string())
+        }
+    }
+
     pub fn parse(buf: &mut Bytes) -> IeResult<Self> {
         if buf.remaining() < 1 {
             return Err(IeError::BufferTooShort {

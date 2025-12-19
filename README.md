@@ -53,6 +53,7 @@
 - Heartbeat Request/Response parsing
 - Recovery Time Stamp handling
 - Connection health monitoring
+- Node ID configuration from config file (IPv4, IPv6, or FQDN)
 
 ## 14. F-SEID Information Element
 - IE type and structure definition

@@ -48,11 +48,8 @@ impl PfcpServer {
         let socket = UdpSocket::bind(&full_addr).await?;
         info!("PFCP server listening on {}", socket.local_addr()?);
 
-        let local_addr = socket.local_addr()?;
-        let node_id = match local_addr.ip() {
-            IpAddr::V4(addr) => NodeId::Ipv4(addr),
-            IpAddr::V6(addr) => NodeId::Ipv6(addr),
-        };
+        let node_id = NodeId::from_string(&upf_node_id);
+        info!("UPF Node ID configured as: {:?}", node_id);
 
         Ok(Self {
             socket: Arc::new(socket),
