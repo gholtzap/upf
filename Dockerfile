@@ -1,4 +1,5 @@
-FROM rust:latest as builder
+FROM rustlang/rust:nightly-slim as builder
+
 
 WORKDIR /build
 
