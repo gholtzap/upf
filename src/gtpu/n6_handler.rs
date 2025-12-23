@@ -188,9 +188,12 @@ impl N6Handler {
     }
 
     fn create_raw_socket_v6() -> Result<Socket> {
-        #[cfg(unix)]
+        #[cfg(target_os = "linux")]
         {
             use std::os::unix::io::{FromRawFd, IntoRawFd};
+
+            const IPV6_HDRINCL: libc::c_int = 36;
+
             let fd = unsafe {
                 libc::socket(libc::AF_INET6, libc::SOCK_RAW, libc::IPPROTO_RAW)
             };
@@ -204,7 +207,7 @@ impl N6Handler {
                 libc::setsockopt(
                     fd,
                     libc::IPPROTO_IPV6,
-                    libc::IPV6_HDRINCL,
+                    IPV6_HDRINCL,
                     &hdrincl as *const _ as *const libc::c_void,
                     std::mem::size_of::<libc::c_int>() as libc::socklen_t,
                 )
@@ -213,6 +216,19 @@ impl N6Handler {
                 anyhow::bail!("Failed to set IPV6_HDRINCL");
             }
 
+            Ok(socket)
+        }
+
+        #[cfg(all(unix, not(target_os = "linux")))]
+        {
+            use std::os::unix::io::FromRawFd;
+            let fd = unsafe {
+                libc::socket(libc::AF_INET6, libc::SOCK_RAW, libc::IPPROTO_RAW)
+            };
+            if fd < 0 {
+                anyhow::bail!("Failed to create raw IPv6 socket");
+            }
+            let socket = unsafe { Socket::from_raw_fd(fd) };
             Ok(socket)
         }
 
