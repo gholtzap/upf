@@ -1,5 +1,11 @@
 # UPF
 
+**This repo is not production-ready yet. I am still developing the core features.**
+
+The UPF (User Plane Function) is a core component of the 5G architecture. It is responsible for packet routing and forwarding, handling user plane traffic between the RAN and data networks.
+
+`upf-rust` is a Rust implementation of 3GPP's 5G UPF specification. The specification can be found [here](https://portal.3gpp.org/desktopmodules/Specifications/SpecificationDetails.aspx?specificationId=3324).
+
 # Implemented features
 ## 7. Configuration
 - YAML-based configuration file
